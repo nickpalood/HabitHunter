@@ -4,7 +4,7 @@ from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel,
 from PyQt6.QtCore import Qt, QDate
 from datetime import datetime
 
-
+#introducing the income tab class
 class IncomeTab(QWidget):
     """Widget for managing income entries"""
 
