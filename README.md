@@ -91,3 +91,25 @@ For open source projects, say how it is licensed.
 
 ## Project status
 If you have run out of energy or time for your project, put a note at the top of the README saying that development has slowed down or stopped completely. Someone may choose to fork your project or volunteer to step in as a maintainer or owner, allowing your project to keep going. You can also make an explicit request for maintainers.
+
+
+# Budget Tracker Software Development Project
+
+## Basic Idea
+Many students struggle to track their spending and often don’t realize where their money goes each month, leading to financial stress and poor budgeting habits. This app helps users manage their finances and avoid overspending.
+
+## Description
+A web-based (or other) app that lets users:  
+- Input income and expenses  
+- Categorize spending (food, entertainment, bills, etc.)  
+- Set monthly budgets for different categories  
+- Visualize spending with charts  
+- Will show warnings when close to overspending  
+
+All data will be stored locally
+
+## Tools & Technologies
+- **Frameworks:** Python
+- **APIs:** Currency converter 
+- **Dataset:** Automatic categorization based on vendor name
+
