@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Expenses</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body { font-family: 'Segoe UI', Arial, sans-serif; background: #f4f6f8; margin: 0; }
+        .navbar { background: #2d3748; color: #fff; padding: 1rem 2rem; display: flex; justify-content: space-between; align-items: center; }
+        .navbar a { color: #fff; text-decoration: none; margin: 0 1rem; font-weight: 500; }
+        .container { max-width: 600px; margin: 2rem auto; background: #fff; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.07); padding: 2rem; }
+        h1 { margin-bottom: 1.5rem; }
+        form { display: flex; gap: 1rem; margin-bottom: 1.5rem; }
+        input[type="text"], input[type="number"] { flex: 1; padding: 0.5rem; border-radius: 6px; border: 1px solid #cbd5e0; }
+        button { background: #c53030; color: #fff; border: none; padding: 0.5rem 1.5rem; border-radius: 6px; font-weight: 500; cursor: pointer; }
+        ul { list-style: none; padding: 0; }
+        li { background: #f7fafc; margin-bottom: 0.5rem; padding: 0.75rem 1rem; border-radius: 6px; }
+        .flash { background: #fed7d7; color: #742a2a; padding: 0.5rem 1rem; border-radius: 6px; margin-bottom: 1rem; }
+        .back-link { display: inline-block; margin-top: 1rem; background: #2b6cb0; color: #fff; padding: 0.5rem 1rem; border-radius: 6px; text-decoration: none; font-weight: 500; }
+    </style>
+</head>
+<body>
+    <div class="navbar">
+        <div><strong>Simple Budget Tracker</strong></div>
+        <div>
+            <a href="{{ url_for('dashboard') }}">Dashboard</a>
+            <a href="{{ url_for('income') }}">Income</a>
+            <a href="{{ url_for('expenses') }}">Expenses</a>
+            <a href="{{ url_for('budgets') }}">Budgets</a>
+            <a href="{{ url_for('reports') }}">Reports</a>
+        </div>
+    </div>
+    <div class="container">
+        <h1>Expenses</h1>
+        <form method="post">
+            <input type="text" name="description" placeholder="Description">
+            <input type="number" name="amount" placeholder="Amount" step="0.01">
+            <button type="submit">Add Expense</button>
+        </form>
+        {% with messages = get_flashed_messages() %}
+          {% if messages %}
+            <div class="flash">
+            {% for message in messages %}
+              <div>{{ message }}</div>
+            {% endfor %}
+            </div>
+          {% endif %}
+        {% endwith %}
+        <ul>
+        {% for expense in expenses %}
+            <li>{{ expense.description }}: {{ expense.amount }}</li>
+        {% endfor %}
+        </ul>
+        <a class="back-link" href="{{ url_for('dashboard') }}">Back to Dashboard</a>
+    </div>
+</body>
+</html>
+
