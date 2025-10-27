@@ -11,10 +11,11 @@
         .container { max-width: 600px; margin: 2rem auto; background: #fff; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.07); padding: 2rem; }
         h1 { margin-bottom: 1.5rem; }
         form { display: flex; gap: 1rem; margin-bottom: 1.5rem; }
-        input[type="text"], input[type="number"] { flex: 1; padding: 0.5rem; border-radius: 6px; border: 1px solid #cbd5e0; }
+        select, input[type="number"] { flex: 1; padding: 0.5rem; border-radius: 6px; border: 1px solid #cbd5e0; }
         button { background: #2b6cb0; color: #fff; border: none; padding: 0.5rem 1.5rem; border-radius: 6px; font-weight: 500; cursor: pointer; }
+        button:hover { background: #2c5282; }
         ul { list-style: none; padding: 0; }
-        li { background: #f7fafc; margin-bottom: 0.5rem; padding: 0.75rem 1rem; border-radius: 6px; }
+        li { background: #f7fafc; margin-bottom: 0.5rem; padding: 0.75rem 1rem; border-radius: 6px; display: flex; justify-content: space-between; align-items: center; }
         .flash { background: #c6f6d5; color: #22543d; padding: 0.5rem 1rem; border-radius: 6px; margin-bottom: 1rem; }
         .back-link { display: inline-block; margin-top: 1rem; background: #2b6cb0; color: #fff; padding: 0.5rem 1rem; border-radius: 6px; text-decoration: none; font-weight: 500; }
     </style>
@@ -33,8 +34,20 @@
     <div class="container">
         <h1>Income</h1>
         <form method="post">
-            <input type="text" name="description" placeholder="Description">
-            <input type="number" name="amount" placeholder="Amount" step="0.01">
+            <select name="category" required>
+                <option value="">-- Select Category --</option>
+                <option value="Salary">Salary</option>
+                <option value="Freelance">Freelance</option>
+                <option value="Business">Business</option>
+                <option value="Investment Returns">Investment Returns</option>
+                <option value="Rental Income">Rental Income</option>
+                <option value="Side Hustle">Side Hustle</option>
+                <option value="Gift/Bonus">Gift/Bonus</option>
+                <option value="Refund">Refund</option>
+                <option value="Interest">Interest</option>
+                <option value="Other">Other</option>
+            </select>
+            <input type="number" name="amount" placeholder="Amount" step="0.01" required>
             <button type="submit">Add Income</button>
         </form>
         {% with messages = get_flashed_messages() %}
@@ -48,11 +61,12 @@
         {% endwith %}
         <ul>
         {% for income in incomes %}
-            <li>{{ income.description }}: {{ income.amount }}</li>
+            <li>
+                <span><strong>{{ income.category }}</strong>: ${{ "%.2f"|format(income.amount) }}</span>
+            </li>
         {% endfor %}
         </ul>
         <a class="back-link" href="{{ url_for('dashboard') }}">Back to Dashboard</a>
     </div>
 </body>
 </html>
-
