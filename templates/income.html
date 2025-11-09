@@ -20,23 +20,33 @@
     </div>
     <div class="container">
         <h1>Income</h1>
+
+        <div class="total-box">
+            <strong>Total Income:</strong> ${{ "%.2f"|format(total_income|default(0)) }}
+        </div>
+
         <form method="post">
-            <select name="category" required>
-                <option value="">-- Select Category --</option>
-                <option value="Salary">Salary</option>
-                <option value="Freelance">Freelance</option>
-                <option value="Business">Business</option>
-                <option value="Investment Returns">Investment Returns</option>
-                <option value="Rental Income">Rental Income</option>
-                <option value="Side Hustle">Side Hustle</option>
-                <option value="Gift/Bonus">Gift/Bonus</option>
-                <option value="Refund">Refund</option>
-                <option value="Interest">Interest</option>
-                <option value="Other">Other</option>
-            </select>
-            <input type="number" name="amount" placeholder="Amount" step="0.01" required>
+            <div class="form-row">
+                <input type="date" name="date" required>
+                <select name="category" required>
+                    <option value="">-- Select Category --</option>
+                    <option value="Salary">Salary</option>
+                    <option value="Freelance">Freelance</option>
+                    <option value="Business">Business</option>
+                    <option value="Investment Returns">Investment Returns</option>
+                    <option value="Rental Income">Rental Income</option>
+                    <option value="Side Hustle">Side Hustle</option>
+                    <option value="Gift/Bonus">Gift/Bonus</option>
+                    <option value="Refund">Refund</option>
+                    <option value="Interest">Interest</option>
+                    <option value="Other">Other</option>
+                </select>
+                <input type="number" name="amount" placeholder="Amount" step="0.01" min="0.01" required>
+            </div>
+            <input type="text" name="description" placeholder="Description (optional)">
             <button type="submit">Add Income</button>
         </form>
+
         {% with messages = get_flashed_messages() %}
           {% if messages %}
             <div class="flash">
@@ -46,14 +56,34 @@
             </div>
           {% endif %}
         {% endwith %}
-        <ul>
-        {% for income in incomes %}
-            <li>
-                <span><strong>{{ income.category }}</strong>: ${{ "%.2f"|format(income.amount) }}</span>
-            </li>
-        {% endfor %}
-        </ul>
+
+        <h2>Income History</h2>
+
+        {% if incomes %}
+            {% for income in incomes %}
+            <div class="transaction-item">
+                <div class="transaction-details">
+                    <div class="transaction-date">{{ income.date }}</div>
+                    <div><strong>{{ income.category }}</strong></div>
+                    {% if income.description %}
+                    <div class="transaction-description">{{ income.description }}</div>
+                    {% endif %}
+                </div>
+                <div class="transaction-amount">${{ "%.2f"|format(income.amount) }}</div>
+                <form method="post" action="{{ url_for('delete_income', income_id=loop.index0) }}">
+                    <button type="submit" class="delete-btn" onclick="return confirm('Delete this income?')">Delete</button>
+                </form>
+            </div>
+            {% endfor %}
+        {% else %}
+            <p class="empty-state">No income entries yet. Add your first income above!</p>
+        {% endif %}
+
         <a class="back-link" href="{{ url_for('dashboard') }}">Back to Dashboard</a>
     </div>
+
+    <script>
+        document.querySelector('input[type="date"]').valueAsDate = new Date();
+    </script>
 </body>
 </html>
