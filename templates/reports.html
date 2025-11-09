@@ -7,6 +7,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="{{ url_for('static', filename='base.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='reports.css') }}">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 
 <body>
@@ -20,14 +21,186 @@
             <a href="{{ url_for('reports') }}">Reports</a>
         </div>
     </div>
+
     <div class="container">
-        <h1>Reports</h1>
+        <h1>Financial Reports</h1>
+
         <div class="report-section">
-            <h2>Summary</h2>
-            <p>Here you can add charts, tables, or export options for your budget reports.</p>
+            <h2>Overview</h2>
+            <div class="summary-cards">
+                <div class="summary-card">
+                    <h3>Total Income</h3>
+                    <p class="amount positive">€{{ "%.2f"|format(total_income) }}</p>
+                </div>
+                <div class="summary-card">
+                    <h3>Total Expenses</h3>
+                    <p class="amount negative">€{{ "%.2f"|format(total_expenses) }}</p>
+                </div>
+                <div class="summary-card">
+                    <h3>Net Balance</h3>
+                    <p class="amount {% if balance >= 0 %}positive{% else %}negative{% endif %}">
+                        €{{ "%.2f"|format(balance) }}
+                    </p>
+                </div>
+            </div>
         </div>
+
+        <div class="report-section">
+            <h2>Expenses by Category</h2>
+            {% if expense_by_category %}
+                <div class="chart-container">
+                    <canvas id="categoryChart"></canvas>
+                </div>
+                <div class="category-breakdown">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Category</th>
+                                <th>Amount</th>
+                                <th>Percentage</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for cat in expense_by_category %}
+                            <tr>
+                                <td>{{ cat.category }}</td>
+                                <td>€{{ "%.2f"|format(cat.amount) }}</td>
+                                <td>{{ "%.1f"|format(cat.percentage) }}%</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <p class="no-data">No expense data available yet.</p>
+            {% endif %}
+        </div>
+
+        <div class="report-section">
+            <h2>Monthly Trend</h2>
+            {% if monthly_data %}
+                <div class="chart-container">
+                    <canvas id="trendChart"></canvas>
+                </div>
+            {% else %}
+                <p class="no-data">Not enough data for trend analysis.</p>
+            {% endif %}
+        </div>
+
+        <div class="report-section">
+            <h2>Recent Transactions</h2>
+            {% if recent_transactions %}
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Type</th>
+                            <th>Category</th>
+                            <th>Amount</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for trans in recent_transactions %}
+                        <tr>
+                            <td>{{ trans.date }}</td>
+                            <td>
+                                <span class="badge {% if trans.type == 'Income' %}badge-income{% else %}badge-expense{% endif %}">
+                                    {{ trans.type }}
+                                </span>
+                            </td>
+                            <td>{{ trans.category }}</td>
+                            <td class="{% if trans.type == 'Income' %}positive{% else %}negative{% endif %}">
+                                {% if trans.type == 'Income' %}+{% else %}-{% endif %}€{{ "%.2f"|format(trans.amount) }}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            {% else %}
+                <p class="no-data">No transactions recorded yet.</p>
+            {% endif %}
+        </div>
+
         <a class="back-link" href="{{ url_for('dashboard') }}">Back to Dashboard</a>
     </div>
+
+    <script>
+        // Pie chart for expenses by category
+        {% if expense_by_category %}
+        const categoryCtx = document.getElementById('categoryChart').getContext('2d');
+        new Chart(categoryCtx, {
+            type: 'pie',
+            data: {
+                labels: {{ category_labels|tojson }},
+                datasets: [{
+                    data: {{ category_values|tojson }},
+                    backgroundColor: [
+                        '#FF6384',
+                        '#36A2EB',
+                        '#FFCE56',
+                        '#4BC0C0',
+                        '#9966FF',
+                        '#FF9F40'
+                    ]
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                plugins: {
+                    legend: {
+                        position: 'bottom'
+                    }
+                }
+            }
+        });
+        {% endif %}
+
+        // Line chart for monthly trends
+        {% if monthly_data %}
+        const trendCtx = document.getElementById('trendChart').getContext('2d');
+        new Chart(trendCtx, {
+            type: 'line',
+            data: {
+                labels: {{ month_labels|tojson }},
+                datasets: [
+                    {
+                        label: 'Income',
+                        data: {{ income_trend|tojson }},
+                        borderColor: '#4BC0C0',
+                        backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                        tension: 0.3
+                    },
+                    {
+                        label: 'Expenses',
+                        data: {{ expense_trend|tojson }},
+                        borderColor: '#FF6384',
+                        backgroundColor: 'rgba(255, 99, 132, 0.2)',
+                        tension: 0.3
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                plugins: {
+                    legend: {
+                        position: 'bottom'
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true
+                    }
+                }
+            }
+        });
+        {% endif %}
+    </script>
 </body>
 
 </html>
+
+
+
+

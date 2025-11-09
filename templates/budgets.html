@@ -18,13 +18,94 @@
             <a href="{{ url_for('reports') }}">Reports</a>
         </div>
     </div>
+
     <div class="container">
-        <h1>Budgets</h1>
+        <h1>Budget Limits</h1>
+
+        {% with messages = get_flashed_messages() %}
+            {% if messages %}
+                <div class="flash-messages">
+                    {% for message in messages %}
+                        <div class="flash">{{ message }}</div>
+                    {% endfor %}
+                </div>
+            {% endif %}
+        {% endwith %}
+
         <div class="budget-section">
-            <p>Set and view your budget goals here.</p>
+            <h2>Set Monthly Budget Limits</h2>
+            <form method="POST" action="{{ url_for('budgets') }}">
+                <div class="form-group">
+                    <label for="category">Category:</label>
+                    <select name="category" id="category" required>
+                        <option value="">-- Select Category --</option>
+                        <option value="Food">Food</option>
+                        <option value="Transport">Transport</option>
+                        <option value="Entertainment">Entertainment</option>
+                        <option value="Shopping">Shopping</option>
+                        <option value="Bills">Bills</option>
+                        <option value="Other">Other</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="limit">Monthly Limit (€):</label>
+                    <input type="number" name="limit" id="limit" step="0.01" min="0" required>
+                </div>
+
+                <button type="submit" class="btn">Set Budget</button>
+            </form>
         </div>
+
+        <div class="budget-list">
+            <h2>Current Budget Limits</h2>
+            {% if budgets %}
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Category</th>
+                            <th>Limit</th>
+                            <th>Spent</th>
+                            <th>Remaining</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for budget in budgets %}
+                        <tr>
+                            <td>{{ budget.category }}</td>
+                            <td>€{{ "%.2f"|format(budget.limit) }}</td>
+                            <td>€{{ "%.2f"|format(budget.spent) }}</td>
+                            <td class="{% if budget.remaining < 0 %}over-budget{% endif %}">
+                                €{{ "%.2f"|format(budget.remaining) }}
+                            </td>
+                            <td>
+                                {% if budget.percentage >= 100 %}
+                                    <span class="status-badge over">Over Budget!</span>
+                                {% elif budget.percentage >= 80 %}
+                                    <span class="status-badge warning">{{ budget.percentage|int }}%</span>
+                                {% else %}
+                                    <span class="status-badge ok">{{ budget.percentage|int }}%</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <form method="POST" action="{{ url_for('delete_budget', budget_id=loop.index0) }}" style="display: inline;">
+                                    <button type="submit" class="btn-delete" onclick="return confirm('Delete this budget limit?')">Delete</button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            {% else %}
+                <p class="no-data">No budget limits set yet. Add one above to start tracking!</p>
+            {% endif %}
+        </div>
+
         <a class="back-link" href="{{ url_for('dashboard') }}">Back to Dashboard</a>
     </div>
 </body>
 </html>
+
 

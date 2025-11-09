@@ -122,11 +122,111 @@ def budgets():
     return render_template('budgets.html')
 
 
+
+
+
 @app.route('/reports')
 def reports():
-    # Implement reports logic
-    return render_template('reports.html')
+    from collections import defaultdict
+    from datetime import datetime
 
+    # Get all transactions
+    incomes = data_manager.get_incomes()
+    expenses = data_manager.get_expenses()
+
+    # Calculate totals
+    total_income = sum([float(getattr(t, 'amount', 0)) for t in incomes])
+    total_expenses = sum([float(getattr(t, 'amount', 0)) for t in expenses])
+    balance = total_income - total_expenses
+
+    # Expenses by category
+    category_totals = defaultdict(float)
+    for expense in expenses:
+        cat = getattr(expense, 'category', 'Other')
+        amount = float(getattr(expense, 'amount', 0))
+        category_totals[cat] += amount
+
+    expense_by_category = []
+    category_labels = []
+    category_values = []
+
+    for cat, amount in category_totals.items():
+        percentage = (amount / total_expenses * 100) if total_expenses > 0 else 0
+        expense_by_category.append({
+            'category': cat,
+            'amount': amount,
+            'percentage': percentage
+        })
+        category_labels.append(cat)
+        category_values.append(amount)
+
+    # Monthly trends
+    income_by_month = defaultdict(float)
+    expense_by_month = defaultdict(float)
+
+    for income in incomes:
+        date_str = getattr(income, 'date', '')
+        if date_str:
+            try:
+                month = datetime.strptime(date_str, '%Y-%m-%d').strftime('%b %Y')
+                amount = float(getattr(income, 'amount', 0))
+                income_by_month[month] += amount
+            except:
+                pass
+
+    for expense in expenses:
+        date_str = getattr(expense, 'date', '')
+        if date_str:
+            try:
+                month = datetime.strptime(date_str, '%Y-%m-%d').strftime('%b %Y')
+                amount = float(getattr(expense, 'amount', 0))
+                expense_by_month[month] += amount
+            except:
+                pass
+
+    # Get all unique months and sort them
+    all_months = sorted(set(list(income_by_month.keys()) + list(expense_by_month.keys())))
+    month_labels = all_months
+    income_trend = [income_by_month.get(m, 0) for m in all_months]
+    expense_trend = [expense_by_month.get(m, 0) for m in all_months]
+
+    monthly_data = len(all_months) > 0
+
+    # Recent transactions (last 10)
+    recent_transactions = []
+
+    for income in incomes:
+        recent_transactions.append({
+            'date': getattr(income, 'date', ''),
+            'type': 'Income',
+            'category': getattr(income, 'category', ''),
+            'amount': float(getattr(income, 'amount', 0))
+        })
+
+    for expense in expenses:
+        recent_transactions.append({
+            'date': getattr(expense, 'date', ''),
+            'type': 'Expense',
+            'category': getattr(expense, 'category', ''),
+            'amount': float(getattr(expense, 'amount', 0))
+        })
+
+    # Sort by date and get last 10
+    recent_transactions.sort(key=lambda x: x['date'], reverse=True)
+    recent_transactions = recent_transactions[:10]
+
+    return render_template('reports.html',
+                           total_income=total_income,
+                           total_expenses=total_expenses,
+                           balance=balance,
+                           expense_by_category=expense_by_category,
+                           category_labels=category_labels,
+                           category_values=category_values,
+                           monthly_data=monthly_data,
+                           month_labels=month_labels,
+                           income_trend=income_trend,
+                           expense_trend=expense_trend,
+                           recent_transactions=recent_transactions)
 
 @app.route('/save')
 def save():
