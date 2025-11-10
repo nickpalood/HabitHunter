@@ -3,7 +3,6 @@ from models.data_manager import DataManager
 from datetime import datetime
 from collections import defaultdict
 
-
 app = Flask(__name__)
 app.secret_key = 'your_secret_key'  # Replace with a secure key
 
@@ -120,11 +119,81 @@ def delete_expense(expense_id):
 
 @app.route('/budgets', methods=['GET', 'POST'])
 def budgets():
-    # Implement budget logic
-    return render_template('budgets.html')
+    if request.method == 'POST':
+        category = request.form.get('category')
+        limit = request.form.get('limit')
+
+        if not category or not limit:
+            flash('Please fill in all fields!')
+            return redirect(url_for('budgets'))
+
+        try:
+            limit = float(limit)
+            if limit <= 0:
+                raise ValueError("Limit must be positive")
+        except ValueError:
+            flash('Invalid limit amount!')
+            return redirect(url_for('budgets'))
+
+        # Create budget entry
+        budget_entry = {
+            'category': category,
+            'limit': limit
+        }
+
+        # Check if budget already exists for this category
+        existing = False
+        for i, b in enumerate(data_manager._budgets):
+            if getattr(b, 'category', None) == category:
+                data_manager._budgets[i] = type('Budget', (), budget_entry)
+                existing = True
+                break
+
+        if not existing:
+            data_manager._budgets.append(type('Budget', (), budget_entry))
+
+        data_manager.save()
+        flash('Budget limit set successfully!')
+        return redirect(url_for('budgets'))
+
+    # Calculate spending per category
+    expenses = data_manager.get_expenses()
+    category_spending = {}
+
+    for expense in expenses:
+        cat = getattr(expense, 'category', 'Other')
+        amount = float(getattr(expense, 'amount', 0))
+        category_spending[cat] = category_spending.get(cat, 0) + amount
+
+    # Prepare budget data with spending info
+    budget_list = []
+    for budget in data_manager.get_budgets():
+        cat = getattr(budget, 'category', '')
+        limit = float(getattr(budget, 'limit', 0))
+        spent = category_spending.get(cat, 0)
+        remaining = limit - spent
+        percentage = (spent / limit * 100) if limit > 0 else 0
+
+        budget_list.append({
+            'category': cat,
+            'limit': limit,
+            'spent': spent,
+            'remaining': remaining,
+            'percentage': percentage
+        })
+
+    return render_template('budgets.html', budgets=budget_list)
 
 
-
+@app.route('/delete_budget/<int:budget_id>', methods=['POST'])
+def delete_budget(budget_id):
+    try:
+        del data_manager._budgets[budget_id]
+        data_manager.save()
+        flash('Budget deleted successfully!')
+    except IndexError:
+        flash('Budget not found!')
+    return redirect(url_for('budgets'))
 
 
 @app.route('/reports')
@@ -256,6 +325,8 @@ def reports():
                            income_trend=income_trend,
                            expense_trend=expense_trend,
                            recent_transactions=recent_transactions)
+
+
 
 @app.route('/save')
 def save():
