@@ -1,6 +1,8 @@
 from flask import Flask, render_template, redirect, url_for, request, flash
 from models.data_manager import DataManager
 from datetime import datetime
+from collections import defaultdict
+
 
 app = Flask(__name__)
 app.secret_key = 'your_secret_key'  # Replace with a secure key
@@ -127,9 +129,6 @@ def budgets():
 
 @app.route('/reports')
 def reports():
-    from collections import defaultdict
-    from datetime import datetime
-
     # Get all transactions
     incomes = data_manager.get_incomes()
     expenses = data_manager.get_expenses()
@@ -161,16 +160,22 @@ def reports():
         category_values.append(amount)
 
     # Monthly trends
-    income_by_month = defaultdict(float)
-    expense_by_month = defaultdict(float)
+    income_by_month = {}
+    expense_by_month = {}
 
     for income in incomes:
         date_str = getattr(income, 'date', '')
         if date_str:
             try:
-                month = datetime.strptime(date_str, '%Y-%m-%d').strftime('%b %Y')
+                date_obj = datetime.strptime(date_str, '%Y-%m-%d')
+                # Use YYYY-MM as key for grouping, but store date object for sorting
+                month_key = date_obj.strftime('%Y-%m')
+                month_label = date_obj.strftime('%b %Y')
                 amount = float(getattr(income, 'amount', 0))
-                income_by_month[month] += amount
+
+                if month_key not in income_by_month:
+                    income_by_month[month_key] = {'date': date_obj, 'label': month_label, 'amount': 0}
+                income_by_month[month_key]['amount'] += amount
             except:
                 pass
 
@@ -178,19 +183,43 @@ def reports():
         date_str = getattr(expense, 'date', '')
         if date_str:
             try:
-                month = datetime.strptime(date_str, '%Y-%m-%d').strftime('%b %Y')
+                date_obj = datetime.strptime(date_str, '%Y-%m-%d')
+                month_key = date_obj.strftime('%Y-%m')
+                month_label = date_obj.strftime('%b %Y')
                 amount = float(getattr(expense, 'amount', 0))
-                expense_by_month[month] += amount
+
+                if month_key not in expense_by_month:
+                    expense_by_month[month_key] = {'date': date_obj, 'label': month_label, 'amount': 0}
+                expense_by_month[month_key]['amount'] += amount
             except:
                 pass
 
     # Get all unique months and sort them
-    all_months = sorted(set(list(income_by_month.keys()) + list(expense_by_month.keys())))
-    month_labels = all_months
-    income_trend = [income_by_month.get(m, 0) for m in all_months]
-    expense_trend = [expense_by_month.get(m, 0) for m in all_months]
+    all_month_keys = set(list(income_by_month.keys()) + list(expense_by_month.keys()))
 
-    monthly_data = len(all_months) > 0
+    # Sort by the actual date, not alphabetically
+    sorted_months = sorted(all_month_keys)
+
+    # Build the data arrays
+    month_labels = []
+    income_trend = []
+    expense_trend = []
+
+    for month_key in sorted_months:
+        # Get the label from either income or expense data
+        if month_key in income_by_month:
+            month_labels.append(income_by_month[month_key]['label'])
+            income_trend.append(income_by_month[month_key]['amount'])
+        elif month_key in expense_by_month:
+            month_labels.append(expense_by_month[month_key]['label'])
+            income_trend.append(0)
+
+        if month_key in expense_by_month:
+            expense_trend.append(expense_by_month[month_key]['amount'])
+        else:
+            expense_trend.append(0)
+
+    monthly_data = len(sorted_months) > 0
 
     # Recent transactions (last 10)
     recent_transactions = []
