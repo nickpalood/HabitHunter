@@ -11,15 +11,128 @@ data_manager = DataManager('data/budget_data.json')
 
 @app.route('/')
 def dashboard():
-    # Example: get summary data for dashboard
     try:
-        total_income = sum([float(getattr(t, 'amount', 0.0)) for t in data_manager.get_incomes()])
-        total_expenses = sum([float(getattr(t, 'amount', 0.0)) for t in data_manager.get_expenses()])
-        balance = total_income - total_expenses
-    except Exception:
-        total_income = total_expenses = balance = 0.0
-    return render_template('dashboard.html', total_income=total_income, total_expenses=total_expenses, balance=balance)
+        incomes = data_manager.get_incomes()
+        expenses = data_manager.get_expenses()
 
+        # Calculate totals
+        total_income = sum([float(getattr(t, 'amount', 0.0)) for t in incomes])
+        total_expenses = sum([float(getattr(t, 'amount', 0.0)) for t in expenses])
+        balance = total_income - total_expenses
+
+        # Get current date info
+        now = datetime.now()
+        current_month = now.strftime('%Y-%m')
+
+        # Calculate last month (handle year rollover)
+        if now.month == 1:
+            last_month = f"{now.year - 1}-12"
+        else:
+            last_month = f"{now.year}-{str(now.month - 1).zfill(2)}"
+
+        # Calculate current month totals
+        current_month_income = 0
+        current_month_expenses = 0
+        last_month_income = 0
+        last_month_expenses = 0
+
+        for income in incomes:
+            date_str = getattr(income, 'date', '')
+            if date_str:
+                try:
+                    date_obj = datetime.strptime(date_str, '%Y-%m-%d')
+                    month_key = date_obj.strftime('%Y-%m')
+                    amount = float(getattr(income, 'amount', 0))
+
+                    if month_key == current_month:
+                        current_month_income += amount
+                    elif month_key == last_month:
+                        last_month_income += amount
+                except:
+                    pass
+
+        for expense in expenses:
+            date_str = getattr(expense, 'date', '')
+            if date_str:
+                try:
+                    date_obj = datetime.strptime(date_str, '%Y-%m-%d')
+                    month_key = date_obj.strftime('%Y-%m')
+                    amount = float(getattr(expense, 'amount', 0))
+
+                    if month_key == current_month:
+                        current_month_expenses += amount
+                    elif month_key == last_month:
+                        last_month_expenses += amount
+                except:
+                    pass
+
+        # Calculate trends
+        income_trend = None
+        income_trend_direction = 'neutral'
+        if last_month_income > 0:
+            income_change = ((current_month_income - last_month_income) / last_month_income) * 100
+            income_trend = abs(income_change)
+            income_trend_direction = 'up' if income_change > 0 else 'down'
+        elif current_month_income > 0:
+            income_trend = 100
+            income_trend_direction = 'up'
+
+        expense_trend = None
+        expense_trend_direction = 'neutral'
+        if last_month_expenses > 0:
+            expense_change = ((current_month_expenses - last_month_expenses) / last_month_expenses) * 100
+            expense_trend = abs(expense_change)
+            expense_trend_direction = 'up' if expense_change > 0 else 'down'
+        elif current_month_expenses > 0:
+            expense_trend = 100
+            expense_trend_direction = 'up'
+
+        # Get recent transactions (combine income and expenses)
+        recent_transactions = []
+
+        for income in incomes:
+            recent_transactions.append({
+                'date': getattr(income, 'date', ''),
+                'type': 'income',
+                'category': getattr(income, 'category', ''),
+                'amount': float(getattr(income, 'amount', 0))
+            })
+
+        for expense in expenses:
+            recent_transactions.append({
+                'date': getattr(expense, 'date', ''),
+                'type': 'expense',
+                'category': getattr(expense, 'category', ''),
+                'amount': float(getattr(expense, 'amount', 0))
+            })
+
+        # Sort by date (most recent first) and get last 5
+        recent_transactions.sort(key=lambda x: x['date'], reverse=True)
+        recent_transactions = recent_transactions[:5]
+
+        # Format dates for display
+        for trans in recent_transactions:
+            try:
+                date_obj = datetime.strptime(trans['date'], '%Y-%m-%d')
+                trans['formatted_date'] = date_obj.strftime('%B %d, %Y')
+            except:
+                trans['formatted_date'] = trans['date']
+
+    except Exception as e:
+        total_income = total_expenses = balance = 0.0
+        income_trend = expense_trend = None
+        income_trend_direction = expense_trend_direction = 'neutral'
+        recent_transactions = []
+
+    return render_template('dashboard.html',
+                           total_income=total_income,
+                           total_expenses=total_expenses,
+                           balance=balance,
+                           income_trend=income_trend,
+                           income_trend_direction=income_trend_direction,
+                           expense_trend=expense_trend,
+                           expense_trend_direction=expense_trend_direction,
+                           recent_transactions=recent_transactions)
 
 @app.route('/income', methods=['GET', 'POST'])
 def income():
