@@ -111,6 +111,117 @@
             </div>
         </div>
 
+        <!-- PREDICTIONS & FORECASTING SECTION -->
+        <div style="margin: 3rem 0;">
+            <h2 style="font-size: 2rem; margin-bottom: 2rem; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">🔮 Future Predictions & Forecasts</h2>
+            
+            <div class="predictions-grid">
+                <!-- Next Month Prediction -->
+                <div class="prediction-card">
+                    <div class="prediction-icon">📆</div>
+                    <div class="prediction-content">
+                        <h3>Next Month's Spending</h3>
+                        <div class="prediction-value">€{{ "%.2f"|format(predicted_monthly_expense) }}</div>
+                        <p class="prediction-desc">Based on your spending history, you'll likely spend this amount next month</p>
+                    </div>
+                </div>
+
+                <!-- Yearly Balance Prediction -->
+                <div class="prediction-card">
+                    <div class="prediction-icon">📊</div>
+                    <div class="prediction-content">
+                        <h3>Predicted Balance (1 Year)</h3>
+                        <div class="prediction-value" style="color: {% if predicted_yearly_balance >= balance %}#10b981{% else %}#ef4444{% endif %};">€{{ "%.2f"|format(predicted_yearly_balance) }}</div>
+                        <p class="prediction-desc">Your estimated balance in 12 months if spending continues</p>
+                    </div>
+                </div>
+
+                <!-- Days Until Low Balance -->
+                <div class="prediction-card">
+                    <div class="prediction-icon">⏱️</div>
+                    <div class="prediction-content">
+                        <h3>Days Until Balance Depletes</h3>
+                        <div class="prediction-value">{% if days_until_low > 100000 or days_until_low < 0 %}∞{% else %}{{ "%.0f"|format(days_until_low) }}{% endif %} days</div>
+                        <p class="prediction-desc">At current spending rate, you'll run out of funds in</p>
+                    </div>
+                </div>
+
+                <!-- Projected Annual Spending -->
+                <div class="prediction-card">
+                    <div class="prediction-icon">💰</div>
+                    <div class="prediction-content">
+                        <h3>Projected Annual Spending</h3>
+                        <div class="prediction-value">€{{ "%.2f"|format(predicted_monthly_expense * 12) }}</div>
+                        <p class="prediction-desc">Estimated total expenses for the next 12 months</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Next 3 Months Detail -->
+            <div class="card" style="margin-top: 2rem;">
+                <div class="card-header">
+                    <h3>📈 Next 3 Months Forecast</h3>
+                    <p class="chart-subtitle">Predicted monthly spending for the next quarter</p>
+                </div>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1.5rem; padding: 2rem;">
+                    {% for prediction in next_3_months_predictions %}
+                    <div style="text-align: center; padding: 1.5rem; background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%); border-radius: 0.75rem; border: 1px solid #e5e7eb;">
+                        <div style="font-size: 0.9rem; color: #6b7280; margin-bottom: 0.5rem;">Month {{ loop.index }}</div>
+                        <div style="font-size: 1.75rem; font-weight: bold; color: #667eea;">€{{ "%.2f"|format(prediction) }}</div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <!-- Top Categories Predictions (Next Year) -->
+            {% if top_pred_categories %}
+            <div class="card" style="margin-top: 2rem;">
+                <div class="card-header">
+                    <h3>🎯 Top Spending Categories (Next Year Forecast)</h3>
+                    <p class="chart-subtitle">Predicted yearly spending per category</p>
+                </div>
+                <div style="padding: 2rem;">
+                    {% for category, prediction in top_pred_categories.items() %}
+                    <div style="margin-bottom: 1.5rem;">
+                        <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+                            <span style="font-weight: 600; color: #1f2937;">{{ category }}</span>
+                            <span style="color: #667eea; font-weight: 700;">€{{ "%.2f"|format(prediction) }}</span>
+                        </div>
+                        <div style="background: #e5e7eb; height: 8px; border-radius: 4px; overflow: hidden;">
+                            <div style="background: linear-gradient(90deg, #667eea 0%, #764ba2 100%); height: 100%; width: {{ (prediction / (max(top_pred_categories.values()) or 1) * 100) }}%;"></div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Prediction Insights -->
+            <div style="margin-top: 2rem; padding: 2rem; background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); border-radius: 1rem; border-left: 4px solid #f59e0b;">
+                <h3 style="margin-top: 0; color: #92400e;">💡 Insights from Predictions</h3>
+                <ul style="color: #78350f; margin: 1rem 0; padding-left: 2rem;">
+                    {% if predicted_yearly_balance < balance %}
+                    <li>⚠️ Your balance is predicted to <strong>decrease</strong> over the next year. Consider reducing expenses or increasing income.</li>
+                    {% elif predicted_yearly_balance > balance * 2 %}
+                    <li>✅ Excellent! Your balance is predicted to <strong>increase significantly</strong> over the next year.</li>
+                    {% else %}
+                    <li>➡️ Your balance should remain relatively <strong>stable</strong> based on current trends.</li>
+                    {% endif %}
+                    
+                    {% if predicted_monthly_expense > avg_expense * 1.2 %}
+                    <li>📈 Your spending is trending <strong>upward</strong>. Monitor your expenses to avoid overspending.</li>
+                    {% elif predicted_monthly_expense < avg_expense * 0.8 %}
+                    <li>📉 Your spending shows a <strong>downward trend</strong>. Keep up the good work!</li>
+                    {% endif %}
+                    
+                    {% if top_pred_categories %}
+                        {% set top_cat = top_pred_categories.keys() | list | first %}
+                        <li>🎯 <strong>{{ top_cat }}</strong> is your biggest spending category for the next year. This is worth monitoring.</li>
+                    {% endif %}
+                </ul>
+            </div>
+        </div>
+
         <!-- Charts Section -->
         <div class="charts-section">
             

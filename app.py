@@ -1,12 +1,41 @@
 from flask import Flask, render_template, redirect, url_for, request, flash
 from models.data_manager import DataManager
-from datetime import datetime
+from datetime import datetime, timedelta
 from collections import defaultdict
+import statistics
 
 app = Flask(__name__)
 app.secret_key = 'your_secret_key'  # Replace with a secure key
 
 data_manager = DataManager('data/budget_data.json')
+
+
+def linear_regression(x_values, y_values):
+    """Simple linear regression using least squares method"""
+    if len(x_values) < 2 or len(y_values) < 2:
+        return None, None
+    
+    n = len(x_values)
+    mean_x = sum(x_values) / n
+    mean_y = sum(y_values) / n
+    
+    numerator = sum((x_values[i] - mean_x) * (y_values[i] - mean_y) for i in range(n))
+    denominator = sum((x_values[i] - mean_x) ** 2 for i in range(n))
+    
+    if denominator == 0:
+        return None, None
+    
+    slope = numerator / denominator
+    intercept = mean_y - slope * mean_x
+    
+    return slope, intercept
+
+
+def predict_value(slope, intercept, x):
+    """Predict a value using linear regression"""
+    if slope is None or intercept is None:
+        return None
+    return slope * x + intercept
 
 
 @app.route('/')
@@ -457,7 +486,7 @@ def reports():
 
 @app.route('/graphs-stats')
 def graphs_stats():
-    """Comprehensive analytics and visualization dashboard"""
+    """Comprehensive analytics and visualization dashboard with predictions"""
     try:
         incomes = data_manager.get_incomes()
         expenses = data_manager.get_expenses()
@@ -596,6 +625,76 @@ def graphs_stats():
         else:
             expense_percentages = {cat: 0 for cat in category_labels}
 
+        # ===== PREDICTIONS & FORECASTING =====
+        predictions = {}
+        
+        # 1. Monthly expense prediction
+        if len(expense_trend) >= 2:
+            x_months = list(range(len(expense_trend)))
+            slope, intercept = linear_regression(x_months, expense_trend)
+            predicted_monthly_expense = predict_value(slope, intercept, len(expense_trend))
+            if predicted_monthly_expense is None:
+                predicted_monthly_expense = avg_expense * 30  # Fallback
+        else:
+            predicted_monthly_expense = avg_expense * 30
+
+        # 2. Next 3 months predictions
+        next_3_months_predictions = []
+        if len(expense_trend) >= 2:
+            x_months = list(range(len(expense_trend)))
+            slope, intercept = linear_regression(x_months, expense_trend)
+            for i in range(1, 4):
+                pred = predict_value(slope, intercept, len(expense_trend) + i)
+                next_3_months_predictions.append(max(0, pred) if pred else avg_expense * 30)
+        else:
+            next_3_months_predictions = [avg_expense * 30] * 3
+
+        # 3. Yearly balance prediction
+        if len(income_trend) >= 2 and len(expense_trend) >= 2:
+            x_months = list(range(max(len(income_trend), len(expense_trend))))
+            
+            # Pad data if needed
+            income_trend_padded = income_trend + [0] * (len(x_months) - len(income_trend))
+            expense_trend_padded = expense_trend + [0] * (len(x_months) - len(expense_trend))
+            
+            income_slope, income_intercept = linear_regression(x_months, income_trend_padded)
+            expense_slope, expense_intercept = linear_regression(x_months, expense_trend_padded)
+            
+            # Predict for next 12 months
+            future_months = 12
+            predicted_yearly_income = 0
+            predicted_yearly_expenses = 0
+            
+            for i in range(len(expense_trend), len(expense_trend) + future_months):
+                pred_income = predict_value(income_slope, income_intercept, i)
+                pred_expense = predict_value(expense_slope, expense_intercept, i)
+                predicted_yearly_income += max(0, pred_income) if pred_income else 0
+                predicted_yearly_expenses += max(0, pred_expense) if pred_expense else 0
+            
+            predicted_yearly_balance = balance + (predicted_yearly_income - predicted_yearly_expenses)
+        else:
+            predicted_yearly_balance = balance + ((avg_income - avg_expense) * 12)
+
+        # 4. Category-specific predictions (next year spending)
+        category_predictions = {}
+        for category in category_totals.keys():
+            cat_expenses = [float(getattr(e, 'amount', 0)) for e in expenses 
+                           if getattr(e, 'category', 'Other') == category]
+            if cat_expenses:
+                avg_cat_spending = sum(cat_expenses) / len(cat_expenses)
+                yearly_prediction = avg_cat_spending * 12
+                category_predictions[category] = yearly_prediction
+        
+        # Sort by predicted spending (descending)
+        sorted_predictions = sorted(category_predictions.items(), key=lambda x: x[1], reverse=True)
+        top_pred_categories = dict(sorted_predictions[:5])
+
+        # 5. Days until balance reaches warning level (if spending continues)
+        if avg_daily_spend > 0:
+            days_until_low = balance / avg_daily_spend if balance > 0 else 0
+        else:
+            days_until_low = float('inf')
+
     except Exception as e:
         print(f"Error in graphs_stats: {e}")
         total_income = total_expenses = balance = 0
@@ -608,6 +707,11 @@ def graphs_stats():
         avg_daily_spend = 0
         busiest_day = 'N/A'
         expense_percentages = {}
+        predicted_monthly_expense = 0
+        next_3_months_predictions = [0, 0, 0]
+        predicted_yearly_balance = 0
+        top_pred_categories = {}
+        days_until_low = float('inf')
 
     return render_template('graphs_stats.html',
                            total_income=total_income,
@@ -631,7 +735,12 @@ def graphs_stats():
                            min_expense=min_expense,
                            avg_daily_spend=avg_daily_spend,
                            busiest_day=busiest_day,
-                           expense_percentages=expense_percentages)
+                           expense_percentages=expense_percentages,
+                           predicted_monthly_expense=predicted_monthly_expense,
+                           next_3_months_predictions=next_3_months_predictions,
+                           predicted_yearly_balance=predicted_yearly_balance,
+                           top_pred_categories=top_pred_categories,
+                           days_until_low=days_until_low)
 
 
 @app.route('/save')
