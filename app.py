@@ -455,6 +455,199 @@ def reports():
 
 
 
+@app.route('/graphs-stats')
+def graphs_stats():
+    """Comprehensive analytics and visualization dashboard"""
+    try:
+        incomes = data_manager.get_incomes()
+        expenses = data_manager.get_expenses()
+
+        # Calculate totals
+        total_income = sum([float(getattr(t, 'amount', 0)) for t in incomes])
+        total_expenses = sum([float(getattr(t, 'amount', 0)) for t in expenses])
+        balance = total_income - total_expenses
+
+        # ===== SPENDING BY CATEGORY =====
+        category_totals = defaultdict(float)
+        category_counts = defaultdict(int)
+        for expense in expenses:
+            cat = getattr(expense, 'category', 'Other')
+            amount = float(getattr(expense, 'amount', 0))
+            category_totals[cat] += amount
+            category_counts[cat] += 1
+
+        category_labels = list(category_totals.keys())
+        category_values = list(category_totals.values())
+
+        # Top 5 categories
+        top_cats = sorted(category_totals.items(), key=lambda x: x[1], reverse=True)[:5]
+        top_cat_names = [cat for cat, _ in top_cats]
+        top_cat_values = [val for _, val in top_cats]
+
+        # ===== SPENDING BY DAY OF WEEK =====
+        day_spending = defaultdict(float)
+        day_transaction_counts = defaultdict(int)
+        day_order = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+        
+        for expense in expenses:
+            date_str = getattr(expense, 'date', '')
+            if date_str:
+                try:
+                    date_obj = datetime.strptime(date_str, '%Y-%m-%d')
+                    day_name = day_order[date_obj.weekday()]
+                    amount = float(getattr(expense, 'amount', 0))
+                    day_spending[day_name] += amount
+                    day_transaction_counts[day_name] += 1
+                except:
+                    pass
+
+        # Ensure all days are represented
+        day_labels = day_order
+        day_values = [day_spending.get(day, 0) for day in day_order]
+        day_transaction_counts_list = [day_transaction_counts.get(day, 0) for day in day_order]
+
+        # ===== MONTHLY TRENDS =====
+        income_by_month = {}
+        expense_by_month = {}
+
+        for income in incomes:
+            date_str = getattr(income, 'date', '')
+            if date_str:
+                try:
+                    date_obj = datetime.strptime(date_str, '%Y-%m-%d')
+                    month_key = date_obj.strftime('%Y-%m')
+                    month_label = date_obj.strftime('%b %Y')
+                    amount = float(getattr(income, 'amount', 0))
+
+                    if month_key not in income_by_month:
+                        income_by_month[month_key] = {'date': date_obj, 'label': month_label, 'amount': 0}
+                    income_by_month[month_key]['amount'] += amount
+                except:
+                    pass
+
+        for expense in expenses:
+            date_str = getattr(expense, 'date', '')
+            if date_str:
+                try:
+                    date_obj = datetime.strptime(date_str, '%Y-%m-%d')
+                    month_key = date_obj.strftime('%Y-%m')
+                    month_label = date_obj.strftime('%b %Y')
+                    amount = float(getattr(expense, 'amount', 0))
+
+                    if month_key not in expense_by_month:
+                        expense_by_month[month_key] = {'date': date_obj, 'label': month_label, 'amount': 0}
+                    expense_by_month[month_key]['amount'] += amount
+                except:
+                    pass
+
+        all_month_keys = set(list(income_by_month.keys()) + list(expense_by_month.keys()))
+        sorted_months = sorted(all_month_keys)
+
+        month_labels = []
+        income_trend = []
+        expense_trend = []
+
+        for month_key in sorted_months:
+            if month_key in income_by_month:
+                month_labels.append(income_by_month[month_key]['label'])
+                income_trend.append(income_by_month[month_key]['amount'])
+            elif month_key in expense_by_month:
+                month_labels.append(expense_by_month[month_key]['label'])
+                income_trend.append(0)
+
+            if month_key in expense_by_month:
+                expense_trend.append(expense_by_month[month_key]['amount'])
+            else:
+                expense_trend.append(0)
+
+        # ===== DAILY SPENDING THROUGHOUT MONTH =====
+        date_spending = defaultdict(float)
+        for expense in expenses:
+            date_str = getattr(expense, 'date', '')
+            if date_str:
+                amount = float(getattr(expense, 'amount', 0))
+                date_spending[date_str] += amount
+
+        sorted_dates = sorted(date_spending.keys())
+        date_labels = sorted_dates
+        date_values = [date_spending[date] for date in sorted_dates]
+
+        # ===== STATISTICS =====
+        all_amounts = [float(getattr(e, 'amount', 0)) for e in expenses]
+        avg_expense = sum(all_amounts) / len(all_amounts) if all_amounts else 0
+        max_expense = max(all_amounts) if all_amounts else 0
+        min_expense = min(all_amounts) if all_amounts else 0
+
+        all_income_amounts = [float(getattr(i, 'amount', 0)) for i in incomes]
+        avg_income = sum(all_income_amounts) / len(all_income_amounts) if all_income_amounts else 0
+
+        # Calculate average daily spending
+        total_days = len(set([getattr(e, 'date', '') for e in expenses]))
+        avg_daily_spend = total_expenses / max(total_days, 1) if total_expenses > 0 else 0
+
+        # Busiest day
+        busiest_day = max(day_spending, key=day_spending.get) if day_spending else 'N/A'
+
+        # Category percentages
+        expense_percentages = {}
+        if total_expenses > 0:
+            for cat, amount in category_totals.items():
+                expense_percentages[cat] = (amount / total_expenses) * 100
+        else:
+            expense_percentages = {cat: 0 for cat in category_labels}
+
+    except Exception as e:
+        print(f"Error in graphs_stats: {e}")
+        total_income = total_expenses = balance = 0
+        category_labels = category_values = []
+        top_cat_names = top_cat_values = []
+        day_labels = day_values = day_transaction_counts_list = []
+        month_labels = income_trend = expense_trend = []
+        date_labels = date_values = []
+        avg_expense = avg_income = max_expense = min_expense = 0
+        avg_daily_spend = 0
+        busiest_day = 'N/A'
+        expense_percentages = {}
+
+    return render_template('graphs_stats.html',
+                           total_income=total_income,
+                           total_expenses=total_expenses,
+                           balance=balance,
+                           category_labels=category_labels,
+                           category_values=category_values,
+                           top_cat_names=top_cat_names,
+                           top_cat_values=top_cat_values,
+                           day_labels=day_labels,
+                           day_values=day_values,
+                           day_transaction_counts=day_transaction_counts_list,
+                           month_labels=month_labels,
+                           income_trend=income_trend,
+                           expense_trend=expense_trend,
+                           date_labels=date_labels,
+                           date_values=date_values,
+                           avg_expense=avg_expense,
+                           avg_income=avg_income,
+                           max_expense=max_expense,
+                           min_expense=min_expense,
+                           avg_daily_spend=avg_daily_spend,
+                           busiest_day=busiest_day,
+                           expense_percentages=expense_percentages)
+
+
+@app.route('/save')
+def save():
+    try:
+        data_manager.save()
+        flash('Data saved successfully!')
+    except Exception as e:
+        flash(f'Error saving data: {e}')
+    return redirect(url_for('dashboard'))
+
+
+if __name__ == '__main__':
+    app.run(debug=True, port=5002)
+
+
 @app.route('/save')
 def save():
     try:
