@@ -118,11 +118,23 @@ def dashboard():
             except:
                 trans['formatted_date'] = trans['date']
 
+        # Calculate expenses by category for chart
+        expense_by_category = defaultdict(float)
+        for expense in expenses:
+            category = getattr(expense, 'category', 'Other')
+            amount = float(getattr(expense, 'amount', 0))
+            expense_by_category[category] += amount
+
+        category_labels = list(expense_by_category.keys())
+        category_values = list(expense_by_category.values())
+
     except Exception as e:
         total_income = total_expenses = balance = 0.0
         income_trend = expense_trend = None
         income_trend_direction = expense_trend_direction = 'neutral'
         recent_transactions = []
+        category_labels = []
+        category_values = []
 
     return render_template('dashboard.html',
                            total_income=total_income,
@@ -132,7 +144,9 @@ def dashboard():
                            income_trend_direction=income_trend_direction,
                            expense_trend=expense_trend,
                            expense_trend_direction=expense_trend_direction,
-                           recent_transactions=recent_transactions)
+                           recent_transactions=recent_transactions,
+                           category_labels=category_labels,
+                           category_values=category_values)
 
 @app.route('/income', methods=['GET', 'POST'])
 def income():

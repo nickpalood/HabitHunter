@@ -2,102 +2,194 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Dashboard</title>
+    <title>Dashboard - Simple Budget Tracker</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="{{ url_for('static', filename='base.css') }}">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.js"></script>
 </head>
 <body>
+    <!-- Navbar -->
     <div class="navbar">
-        <div><strong>Simple Budget Tracker</strong></div>
-        <div>
-            <a href="{{ url_for('dashboard') }}">Dashboard</a>
+        <div class="navbar-brand">
+            <div class="navbar-avatar">A</div>
+            <strong>Budget Tracker</strong>
+        </div>
+        <div class="navbar-nav">
+            <a href="{{ url_for('dashboard') }}" class="active">Dashboard</a>
             <a href="{{ url_for('income') }}">Income</a>
             <a href="{{ url_for('expenses') }}">Expenses</a>
             <a href="{{ url_for('budgets') }}">Budgets</a>
             <a href="{{ url_for('reports') }}">Reports</a>
         </div>
     </div>
-    <div class="container">
+
+    <div class="container container-lg">
         {% with messages = get_flashed_messages() %}
           {% if messages %}
-            <div class="flash">
+            <div class="flash-messages">
             {% for message in messages %}
-              <div>{{ message }}</div>
+              <div class="alert alert-success">{{ message }}</div>
             {% endfor %}
             </div>
           {% endif %}
         {% endwith %}
 
-        <div class="stats">
-            <div class="card">
-                <div>Total Income</div>
-                <strong>€{{ "%.2f"|format(total_income) }}</strong>
-                {% if income_trend is not none %}
-                    <div class="trend {{ income_trend_direction }}">{{ "%.1f"|format(income_trend) }}% this month</div>
-                {% else %}
-                    <div style="font-size: 0.875rem; color: var(--gray-400); margin-top: 0.5rem;">No trend data yet</div>
-                {% endif %}
-            </div>
-            <div class="card">
-                <div>Total Expenses</div>
-                <strong>€{{ "%.2f"|format(total_expenses) }}</strong>
-                {% if expense_trend is not none %}
-                    <div class="trend {{ expense_trend_direction }}">{{ "%.1f"|format(expense_trend) }}% this month</div>
-                {% else %}
-                    <div style="font-size: 0.875rem; color: var(--gray-400); margin-top: 0.5rem;">No trend data yet</div>
-                {% endif %}
-            </div>
-            <div class="card">
-                <div>Balance</div>
-                <strong>€{{ "%.2f"|format(balance) }}</strong>
-                {% if balance > 0 %}
-                <div class="trend up">Surplus</div>
-                {% elif balance < 0 %}
-                <div class="trend down">Deficit</div>
-                {% else %}
-                <div style="font-size: 0.875rem; color: var(--gray-400); margin-top: 0.5rem;">Balanced</div>
-                {% endif %}
+        <!-- Page Header -->
+        <div class="page-header">
+            <div>
+                <h1>Welcome back</h1>
+                <p>Here's your financial overview</p>
             </div>
         </div>
 
-        <div class="save-data-box">
-            <a href="{{ url_for('save') }}" class="btn">💾 Save Data</a>
+        <!-- Balance Card - Full Width -->
+        <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 1rem; padding: 3rem; box-shadow: 0 12px 40px rgba(0,0,0,0.22); margin-bottom: 2rem;">
+            <span style="display: block; color: rgba(255,255,255,0.9); font-size: 0.95rem; font-weight: 600; margin-bottom: 0.5rem; letter-spacing: 0.05em;">YOUR BALANCE</span>
+            <span style="display: block; color: white; font-size: 3.5rem; font-weight: 800; margin-bottom: 1rem;">€{{ "%.2f"|format(balance) }}</span>
+            <span style="display: block; color: rgba(255,255,255,0.85); font-size: 0.9rem;">Total available funds</span>
         </div>
 
-        {% if recent_transactions %}
-        <div class="recent-transactions">
-            <h3>Recent Activity</h3>
+        <!-- Quick Actions -->
+        <div style="margin: 2.5rem 0;">
+            <h3 style="margin-bottom: 1.5rem;">Quick Actions</h3>
+            <div class="quick-actions">
+                <a href="{{ url_for('income') }}" class="action-button">
+                    <div class="action-icon send">💰</div>
+                    <span class="action-label">Add Income</span>
+                </a>
+                <a href="{{ url_for('expenses') }}" class="action-button">
+                    <div class="action-icon exchange">💸</div>
+                    <span class="action-label">Add Expense</span>
+                </a>
+                <a href="{{ url_for('budgets') }}" class="action-button">
+                    <div class="action-icon add">🎯</div>
+                    <span class="action-label">Budgets</span>
+                </a>
+                <a href="{{ url_for('reports') }}" class="action-button">
+                    <div class="action-icon save">📊</div>
+                    <span class="action-label">Reports</span>
+                </a>
+                <a href="{{ url_for('save') }}" class="action-button">
+                    <div class="action-icon request">💾</div>
+                    <span class="action-label">Save Data</span>
+                </a>
+            </div>
+        </div>
 
-            {% for transaction in recent_transactions %}
-            <div class="recent-transaction-item">
-                <div class="recent-transaction-info">
-                    {% if transaction.type == 'income' %}
-                    <div class="transaction-icon income">+</div>
-                    {% else %}
-                    <div class="transaction-icon expense">-</div>
-                    {% endif %}
+        <!-- Expenses Breakdown Chart -->
+        <div class="dashboard-grid" style="grid-template-columns: 1fr 1fr; gap: 2rem; margin-bottom: 2rem;">
+            <!-- Chart Section -->
+            <div class="card">
+                <div class="card-header">
+                    <h3>Spending Breakdown</h3>
+                </div>
+                <div style="position: relative; height: 250px;">
+                    <canvas id="categoryChart"></canvas>
+                </div>
+            </div>
+
+            <!-- Quick Stats Section -->
+            <div class="card">
+                <div class="card-header">
+                    <h3>Quick Stats</h3>
+                </div>
+                <div style="display: flex; flex-direction: column; gap: 1.5rem;">
                     <div>
-                        <div style="font-weight: 600; color: var(--gray-900);">{{ transaction.category }}</div>
-                        <div style="font-size: 0.875rem; color: var(--gray-500);">{{ transaction.formatted_date }}</div>
+                        <div style="font-size: 0.875rem; color: #555555; font-weight: 700; margin-bottom: 0.5rem;">Total Income</div>
+                        <div style="font-size: 1.75rem; font-weight: 800; color: var(--success);">€{{ "%.2f"|format(total_income) }}</div>
+                    </div>
+                    <div>
+                        <div style="font-size: 0.875rem; color: #555555; font-weight: 700; margin-bottom: 0.5rem;">Total Expenses</div>
+                        <div style="font-size: 1.75rem; font-weight: 800; color: var(--danger);">€{{ "%.2f"|format(total_expenses) }}</div>
                     </div>
                 </div>
-                {% if transaction.type == 'income' %}
-                <div class="recent-transaction-amount positive">+€{{ "%.2f"|format(transaction.amount) }}</div>
-                {% else %}
-                <div class="recent-transaction-amount negative">-€{{ "%.2f"|format(transaction.amount) }}</div>
-                {% endif %}
             </div>
-            {% endfor %}
         </div>
 
-        <div style="text-align: center; margin-top: 1.5rem;">
-            <a href="{{ url_for('reports') }}" style="color: var(--primary); text-decoration: none; font-weight: 600;">View Full Reports →</a>
+        <!-- Recent Transactions -->
+        {% if recent_transactions %}
+        <div class="card">
+            <div class="card-header">
+                <h3>Recent Transactions</h3>
+                <a href="{{ url_for('reports') }}" class="card-header-action">
+                    See all
+                    <span>→</span>
+                </a>
+            </div>
+
+            <div>
+                {% for transaction in recent_transactions %}
+                <div class="transaction-item">
+                    <div class="transaction-info">
+                        {% if transaction.type == 'income' %}
+                        <div class="transaction-icon income">💵</div>
+                        {% else %}
+                        <div class="transaction-icon expense">🛒</div>
+                        {% endif %}
+                        <div class="transaction-details">
+                            <span class="transaction-name">{{ transaction.category }}</span>
+                            <span class="transaction-date">{{ transaction.formatted_date }}</span>
+                        </div>
+                    </div>
+                    {% if transaction.type == 'income' %}
+                    <div class="transaction-amount positive">+€{{ "%.2f"|format(transaction.amount) }}</div>
+                    {% else %}
+                    <div class="transaction-amount negative">-€{{ "%.2f"|format(transaction.amount) }}</div>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
         </div>
+
         {% else %}
         <div class="empty-state">
-            <p>No transactions yet. Start by adding some <a href="{{ url_for('income') }}" style="color: var(--primary);">income</a> or <a href="{{ url_for('expenses') }}" style="color: var(--primary);">expenses</a>!</p>
+            <div class="empty-state-icon">📭</div>
+            <p>No transactions yet</p>
+            <p style="font-size: 0.9rem; color: var(--gray-400);">Start by adding some <a href="{{ url_for('income') }}" style="color: var(--primary); text-decoration: none;">income</a> or <a href="{{ url_for('expenses') }}" style="color: var(--primary); text-decoration: none;">expenses</a></p>
         </div>
         {% endif %}
     </div>
+
+    <script>
+        // Doughnut chart for expenses by category
+        const categoryCtx = document.getElementById('categoryChart').getContext('2d');
+        new Chart(categoryCtx, {
+            type: 'doughnut',
+            data: {
+                labels: {{ category_labels|tojson }},
+                datasets: [{
+                    data: {{ category_values|tojson }},
+                    backgroundColor: [
+                        '#a855f7',
+                        '#ef4444',
+                        '#f59e0b',
+                        '#10b981',
+                        '#3b82f6',
+                        '#ec4899',
+                        '#06b6d4',
+                        '#8b5cf6'
+                    ],
+                    borderColor: '#fff',
+                    borderWidth: 2
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'bottom',
+                        labels: {
+                            usePointStyle: true,
+                            padding: 15,
+                            font: {
+                                size: 12
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    </script>
 </body>
 </html>
