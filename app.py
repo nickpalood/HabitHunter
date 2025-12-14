@@ -688,6 +688,7 @@ def graphs_stats():
         # Sort by predicted spending (descending)
         sorted_predictions = sorted(category_predictions.items(), key=lambda x: x[1], reverse=True)
         top_pred_categories = dict(sorted_predictions[:5])
+        max_pred_category_value = max(top_pred_categories.values()) if top_pred_categories else 1
 
         # 5. Days until balance reaches warning level (if spending continues)
         if avg_daily_spend > 0:
@@ -711,6 +712,7 @@ def graphs_stats():
         next_3_months_predictions = [0, 0, 0]
         predicted_yearly_balance = 0
         top_pred_categories = {}
+        max_pred_category_value = 1
         days_until_low = float('inf')
 
     return render_template('graphs_stats.html',
@@ -740,6 +742,7 @@ def graphs_stats():
                            next_3_months_predictions=next_3_months_predictions,
                            predicted_yearly_balance=predicted_yearly_balance,
                            top_pred_categories=top_pred_categories,
+                           max_pred_category_value=max_pred_category_value,
                            days_until_low=days_until_low)
 
 
