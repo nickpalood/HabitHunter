@@ -206,7 +206,7 @@ Both follow the same pattern with different data sources. Examples use `/income`
     'category_labels': list,        # For pie chart
     'category_values': list,        # For pie chart
     'monthly_data': bool,           # True if enough data for trends
-    'month_labels': list,           # e.g., ['Nov 2024', 'Dec 2024']
+    'month_labels': list,           # e.g., ['Nov 2025', 'Dec 2025']
     'income_trend': list,           # Monthly income amounts
     'expense_trend': list,          # Monthly expense amounts
     'recent_transactions': list     # Last 10 transactions
@@ -641,7 +641,7 @@ budgets = data_manager.get_budgets()
 
 # Add new entry
 new_income = type('Income', (), {
-    'date': '2024-12-09',
+    'date': '2025-12-08',
     'category': 'Salary',
     'amount': 3000.0,
     'description': 'Monthly salary'

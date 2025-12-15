@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Graphs & Stats - Simple Budget Tracker</title>
+    <title>Graphs & Stats - Habit Hunter</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="{{ url_for('static', filename='base.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='graphs.css') }}">
@@ -12,18 +12,38 @@
     <!-- Navbar -->
     <div class="navbar">
         <div class="navbar-brand">
-            <div class="navbar-avatar">A</div>
-            <strong>Budget Tracker</strong>
+            <div class="navbar-avatar">{{ session.username[0].upper() if session.username else 'U' }}</div>
+            <strong>Habit Hunter</strong>
+        </div>
+        <div class="navbar-timeframe">
+            <label for="timeframe" style="margin-right: 8px; font-size: 14px; color: #666;">Timeframe:</label>
+            <select id="timeframe" onchange="changeTimeframe(this.value)" style="padding: 6px 10px; border-radius: 4px; border: 1px solid #ddd; background: white; cursor: pointer;">
+                <option value="1" {% if timeframe_months == 1 %}selected{% endif %}>1 Month</option>
+                <option value="2" {% if timeframe_months == 2 %}selected{% endif %}>2 Months</option>
+                <option value="3" {% if timeframe_months == 3 %}selected{% endif %}>3 Months</option>
+                <option value="6" {% if timeframe_months == 6 %}selected{% endif %}>6 Months</option>
+                <option value="9" {% if timeframe_months == 9 %}selected{% endif %}>9 Months</option>
+                <option value="12" {% if timeframe_months == 12 %}selected{% endif %}>12 Months</option>
+            </select>
         </div>
         <div class="navbar-nav">
             <a href="{{ url_for('dashboard') }}">Dashboard</a>
             <a href="{{ url_for('income') }}">Income</a>
             <a href="{{ url_for('expenses') }}">Expenses</a>
             <a href="{{ url_for('budgets') }}">Budgets</a>
-            <a href="{{ url_for('graphs_stats') }}" class="active">Graphs & Stats</a>
             <a href="{{ url_for('reports') }}">Reports</a>
+            <a href="{{ url_for('graphs_stats') }}" class="active">Graphs & Stats</a>
+            <a href="{{ url_for('revolut_import') }}">Revolut Import</a>
+            <a href="{{ url_for('logout') }}" style="margin-left: auto;">Logout ({{ session.username }})</a>
         </div>
     </div>
+
+    <script>
+    function changeTimeframe(months) {
+        fetch('/set_timeframe/' + months, { method: 'POST' })
+            .then(() => window.location.reload());
+    }
+    </script>
 
     <div class="container container-lg">
         {% with messages = get_flashed_messages() %}
@@ -40,7 +60,7 @@
         <div class="page-header">
             <div>
                 <h1>📊 Analytics & Insights</h1>
-                <p>Deep dive into your spending patterns and financial trends</p>
+
             </div>
         </div>
 
@@ -65,7 +85,7 @@
             <div class="stat-card">
                 <div class="stat-icon" style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);">📈</div>
                 <div class="stat-content">
-                    <div class="stat-label">Balance</div>
+                    <div class="stat-label">Net Balance</div>
                     <div class="stat-value" style="color: {% if balance >= 0 %}#10b981{% else %}#ef4444{% endif %};">€{{ "%.2f"|format(balance) }}</div>
                 </div>
             </div>
@@ -113,12 +133,11 @@
 
         <!-- PREDICTIONS & FORECASTING SECTION -->
         <div style="margin: 3rem 0;">
-            <h2 style="font-size: 2rem; margin-bottom: 2rem; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">🔮 Future Predictions & Forecasts</h2>
+            <h2 style="font-size: 2rem; margin-bottom: 2rem; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">Future Predictions & Forecasts</h2>
             
             <div class="predictions-grid">
                 <!-- Next Month Prediction -->
                 <div class="prediction-card">
-                    <div class="prediction-icon">📆</div>
                     <div class="prediction-content">
                         <h3>Next Month's Spending</h3>
                         <div class="prediction-value">€{{ "%.2f"|format(predicted_monthly_expense) }}</div>
@@ -128,7 +147,6 @@
 
                 <!-- Yearly Balance Prediction -->
                 <div class="prediction-card">
-                    <div class="prediction-icon">📊</div>
                     <div class="prediction-content">
                         <h3>Predicted Balance (1 Year)</h3>
                         <div class="prediction-value" style="color: {% if predicted_yearly_balance >= balance %}#10b981{% else %}#ef4444{% endif %};">€{{ "%.2f"|format(predicted_yearly_balance) }}</div>
@@ -138,7 +156,6 @@
 
                 <!-- Days Until Low Balance -->
                 <div class="prediction-card">
-                    <div class="prediction-icon">⏱️</div>
                     <div class="prediction-content">
                         <h3>Days Until Balance Depletes</h3>
                         <div class="prediction-value">{% if days_until_low > 100000 or days_until_low < 0 %}∞{% else %}{{ "%.0f"|format(days_until_low) }}{% endif %} days</div>
@@ -148,7 +165,6 @@
 
                 <!-- Projected Annual Spending -->
                 <div class="prediction-card">
-                    <div class="prediction-icon">💰</div>
                     <div class="prediction-content">
                         <h3>Projected Annual Spending</h3>
                         <div class="prediction-value">€{{ "%.2f"|format(predicted_monthly_expense * 12) }}</div>
@@ -160,7 +176,7 @@
             <!-- Next 3 Months Detail -->
             <div class="card" style="margin-top: 2rem;">
                 <div class="card-header">
-                    <h3>📈 Next 3 Months Forecast</h3>
+                    <h3>Next 3 Months Forecast</h3>
                     <p class="chart-subtitle">Predicted monthly spending for the next quarter</p>
                 </div>
                 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1.5rem; padding: 2rem;">
@@ -177,7 +193,7 @@
             {% if top_pred_categories %}
             <div class="card" style="margin-top: 2rem;">
                 <div class="card-header">
-                    <h3>🎯 Top Spending Categories (Next Year Forecast)</h3>
+                    <h3>Top Spending Categories (Next Year Forecast)</h3>
                     <p class="chart-subtitle">Predicted yearly spending per category</p>
                 </div>
                 <div style="padding: 2rem;">
@@ -198,25 +214,25 @@
 
             <!-- Prediction Insights -->
             <div style="margin-top: 2rem; padding: 2rem; background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); border-radius: 1rem; border-left: 4px solid #f59e0b;">
-                <h3 style="margin-top: 0; color: #92400e;">💡 Insights from Predictions</h3>
+                <h3 style="margin-top: 0; color: #92400e;">Insights from Predictions</h3>
                 <ul style="color: #78350f; margin: 1rem 0; padding-left: 2rem;">
                     {% if predicted_yearly_balance < balance %}
-                    <li>⚠️ Your balance is predicted to <strong>decrease</strong> over the next year. Consider reducing expenses or increasing income.</li>
+                    <li>Your balance is predicted to <strong>decrease</strong> over the next year. Consider reducing expenses or increasing income.</li>
                     {% elif predicted_yearly_balance > balance * 2 %}
-                    <li>✅ Excellent! Your balance is predicted to <strong>increase significantly</strong> over the next year.</li>
+                    <li>Excellent! Your balance is predicted to <strong>increase significantly</strong> over the next year.</li>
                     {% else %}
-                    <li>➡️ Your balance should remain relatively <strong>stable</strong> based on current trends.</li>
+                    <li>Your balance should remain relatively <strong>stable</strong> based on current trends.</li>
                     {% endif %}
                     
                     {% if predicted_monthly_expense > avg_expense * 1.2 %}
-                    <li>📈 Your spending is trending <strong>upward</strong>. Monitor your expenses to avoid overspending.</li>
+                    <li>Your spending is trending <strong>upward</strong>. Monitor your expenses to avoid overspending.</li>
                     {% elif predicted_monthly_expense < avg_expense * 0.8 %}
-                    <li>📉 Your spending shows a <strong>downward trend</strong>. Keep up the good work!</li>
+                    <li>Your spending shows a <strong>downward trend</strong>. Keep up the good work!</li>
                     {% endif %}
                     
                     {% if top_pred_categories %}
                         {% set top_cat = top_pred_categories.keys() | list | first %}
-                        <li>🎯 <strong>{{ top_cat }}</strong> is your biggest spending category for the next year. This is worth monitoring.</li>
+                        <li><strong>{{ top_cat }}</strong> is your biggest spending category for the next year. This is worth monitoring.</li>
                     {% endif %}
                 </ul>
             </div>
@@ -229,7 +245,7 @@
             {% if category_labels %}
             <div class="card chart-card">
                 <div class="card-header">
-                    <h3>💹 Spending by Category</h3>
+                    <h3>Spending by Category</h3>
                     <p class="chart-subtitle">Total breakdown of your expenses</p>
                 </div>
                 <div class="chart-container">
@@ -242,7 +258,7 @@
             {% if top_cat_names %}
             <div class="card chart-card">
                 <div class="card-header">
-                    <h3>🥇 Top 5 Categories</h3>
+                    <h3>Top 5 Categories</h3>
                     <p class="chart-subtitle">Your biggest spending areas</p>
                 </div>
                 <div class="chart-container">
@@ -255,7 +271,7 @@
             {% if day_labels %}
             <div class="card chart-card">
                 <div class="card-header">
-                    <h3>📅 Spending by Day of Week</h3>
+                    <h3>Spending by Day of Week</h3>
                     <p class="chart-subtitle">Which days do you spend the most?</p>
                 </div>
                 <div class="chart-container">
@@ -268,7 +284,7 @@
             {% if day_transaction_counts %}
             <div class="card chart-card">
                 <div class="card-header">
-                    <h3>🔔 Transaction Frequency</h3>
+                    <h3>Transaction Frequency</h3>
                     <p class="chart-subtitle">How many transactions per day?</p>
                 </div>
                 <div class="chart-container">
@@ -281,7 +297,7 @@
             {% if month_labels %}
             <div class="card chart-card full-width">
                 <div class="card-header">
-                    <h3>📈 Monthly Trends</h3>
+                    <h3>Monthly Trends</h3>
                     <p class="chart-subtitle">Income and expense trends over time</p>
                 </div>
                 <div class="chart-container">
@@ -294,7 +310,7 @@
             {% if date_labels %}
             <div class="card chart-card full-width">
                 <div class="card-header">
-                    <h3>📊 Cumulative Monthly Spending</h3>
+                    <h3>Cumulative Monthly Spending</h3>
                     <p class="chart-subtitle">How your spending distributes across the month</p>
                 </div>
                 <div class="chart-container">
@@ -307,7 +323,7 @@
             {% if expense_percentages %}
             <div class="card chart-card full-width">
                 <div class="card-header">
-                    <h3>🎯 Category Breakdown</h3>
+                    <h3>Category Breakdown</h3>
                     <p class="chart-subtitle">Percentage of total spending per category</p>
                 </div>
                 <div class="category-table">

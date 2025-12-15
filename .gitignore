@@ -1,1 +1,33 @@
+# IDE
 .idea/
+.vscode/
+*.swp
+*.swo
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+
+# Environment
+venv/
+.venv/
+.venv_old/
+env/
+
+# Database and data files
+data/budget_tracker.db
+data/merchant_category_expenses.json
+data/merchant_category_income.json
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# OS
+.DS_Store
+Thumbs.db

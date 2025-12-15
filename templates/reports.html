@@ -3,7 +3,7 @@
 
 <head>
     <meta charset="UTF-8">
-    <title>Reports - Simple Budget Tracker</title>
+    <title>Reports - Habit Hunter</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="{{ url_for('static', filename='base.css') }}">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -13,8 +13,19 @@
     <!-- Navbar -->
     <div class="navbar">
         <div class="navbar-brand">
-            <div class="navbar-avatar">A</div>
-            <strong>Budget Tracker</strong>
+            <div class="navbar-avatar">{{ session.username[0].upper() if session.username else 'U' }}</div>
+            <strong>Habit Hunter</strong>
+        </div>
+        <div class="navbar-timeframe">
+            <label for="timeframe" style="margin-right: 8px; font-size: 14px; color: #666;">Timeframe:</label>
+            <select id="timeframe" onchange="changeTimeframe(this.value)" style="padding: 6px 10px; border-radius: 4px; border: 1px solid #ddd; background: white; cursor: pointer;">
+                <option value="1" {% if timeframe_months == 1 %}selected{% endif %}>1 Month</option>
+                <option value="2" {% if timeframe_months == 2 %}selected{% endif %}>2 Months</option>
+                <option value="3" {% if timeframe_months == 3 %}selected{% endif %}>3 Months</option>
+                <option value="6" {% if timeframe_months == 6 %}selected{% endif %}>6 Months</option>
+                <option value="9" {% if timeframe_months == 9 %}selected{% endif %}>9 Months</option>
+                <option value="12" {% if timeframe_months == 12 %}selected{% endif %}>12 Months</option>
+            </select>
         </div>
         <div class="navbar-nav">
             <a href="{{ url_for('dashboard') }}">Dashboard</a>
@@ -23,15 +34,23 @@
             <a href="{{ url_for('budgets') }}">Budgets</a>
             <a href="{{ url_for('reports') }}" class="active">Reports</a>
             <a href="{{ url_for('graphs_stats') }}">Graphs & Stats</a>
+            <a href="{{ url_for('revolut_import') }}">Revolut Import</a>
+            <a href="{{ url_for('logout') }}" style="margin-left: auto;">Logout ({{ session.username }})</a>
         </div>
     </div>
+
+    <script>
+    function changeTimeframe(months) {
+        fetch('/set_timeframe/' + months, { method: 'POST' })
+            .then(() => window.location.reload());
+    }
+    </script>
 
     <div class="container container-lg">
         <!-- Page Header -->
         <div class="page-header">
             <div>
                 <h1>Financial Reports</h1>
-                <p>Analyze your financial data and trends</p>
             </div>
         </div>
 
@@ -105,8 +124,9 @@
                         <thead>
                             <tr>
                                 <th>Date</th>
-                                <th>Type</th>
+                                <th>Description</th>
                                 <th>Category</th>
+                                <th>Type</th>
                                 <th>Amount</th>
                             </tr>
                         </thead>
@@ -114,6 +134,8 @@
                             {% for trans in recent_transactions %}
                             <tr>
                                 <td>{{ trans.date }}</td>
+                                <td>{{ trans.description if trans.description else '-' }}</td>
+                                <td>{{ trans.category }}</td>
                                 <td>
                                     {% if trans.type == 'income' %}
                                     <span style="display: inline-block; background: var(--success-light); color: var(--success); padding: 0.25rem 0.75rem; border-radius: 999px; font-size: 0.75rem; font-weight: 600;">Income</span>
@@ -121,7 +143,6 @@
                                     <span style="display: inline-block; background: var(--danger-light); color: var(--danger); padding: 0.25rem 0.75rem; border-radius: 999px; font-size: 0.75rem; font-weight: 600;">Expense</span>
                                     {% endif %}
                                 </td>
-                                <td>{{ trans.category }}</td>
                                 <td class="{% if trans.type == 'income' %}positive{% else %}negative{% endif %}">
                                     {% if trans.type == 'income' %}+{% else %}-{% endif %}€{{ "%.2f"|format(trans.amount) }}
                                 </td>

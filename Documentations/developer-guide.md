@@ -359,14 +359,14 @@ dm = DataManager('data/budget_data.json')
 
 # Add test income
 dm._incomes.append(type('Income', (), {
-    'date': '2024-12-01',
+    'date': '2025-12-10',
     'category': 'Salary',
     'amount': 3000.0
 }))
 
 # Add test expense
 dm._expenses.append(type('Expense', (), {
-    'date': '2024-12-05',
+    'date': '2025-12-12',
     'category': 'Food & Dining',
     'amount': 50.0
 }))

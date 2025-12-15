@@ -1,13 +1,30 @@
-from flask import Flask, render_template, redirect, url_for, request, flash
+from flask import Flask, render_template, redirect, url_for, request, flash, session
 from models.data_manager import DataManager
 from datetime import datetime, timedelta
 from collections import defaultdict
 import statistics
+from api.revolut_importer import RevolutImporter
+from merchant_mapper import update_merchant_category, auto_categorize_transaction, ensure_merchant_files_exist
+from currency_converter import format_amount_with_conversion, convert_to_eur
+from functools import wraps
+import database
 
 app = Flask(__name__)
-app.secret_key = 'your_secret_key'  # Replace with a secure key
+app.secret_key = 'your_secret_key_please_change_in_production'  # Replace with a secure key
 
-data_manager = DataManager('data/budget_data.json')
+# Initialize database
+database.init_db()
+
+# Ensure merchant category files exist
+ensure_merchant_files_exist()
+
+# Register Jinja2 filter for currency formatting
+@app.template_filter('format_with_conversion')
+def jinja_format_with_conversion(amount, currency):
+    """Format amount with currency conversion"""
+    return format_amount_with_conversion(amount, currency)
+
+data_manager = DataManager()
 
 
 def linear_regression(x_values, y_values):
@@ -30,6 +47,130 @@ def linear_regression(x_values, y_values):
     
     return slope, intercept
 
+def login_required(f):
+    """Decorator to require login for routes"""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'user_id' not in session:
+            flash('Please log in to access this page.')
+            return redirect(url_for('login'))
+        # Load user data for the current session
+        if data_manager.user_id != session['user_id']:
+            data_manager.set_user(session['user_id'])
+        return f(*args, **kwargs)
+    return decorated_function
+
+
+@app.route('/')
+def index():
+    if 'user_id' in session:
+        return redirect(url_for('dashboard'))
+    return redirect(url_for('login'))
+
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        username = request.form.get('username')
+        password = request.form.get('password')
+        
+        if not username or not password:
+            flash('Please fill in all fields!')
+            return redirect(url_for('login'))
+        
+        user_id = database.authenticate_user(username, password)
+        if user_id:
+            session['user_id'] = user_id
+            session['username'] = username
+            session['currency'] = session.get('currency', 'EUR')
+            data_manager.set_user(user_id)
+            flash(f'Welcome back, {username}!')
+            return redirect(url_for('dashboard'))
+        else:
+            flash('Invalid username or password!')
+            return redirect(url_for('login'))
+    
+    return render_template('login.html')
+
+
+@app.route('/signup', methods=['GET', 'POST'])
+def signup():
+    if request.method == 'POST':
+        username = request.form.get('username')
+        password = request.form.get('password')
+        confirm_password = request.form.get('confirm_password')
+        
+        if not username or not password or not confirm_password:
+            flash('Please fill in all fields!')
+            return redirect(url_for('signup'))
+        
+        if len(username) < 3:
+            flash('Username must be at least 3 characters long!')
+            return redirect(url_for('signup'))
+        
+        if len(password) < 4:
+            flash('Password must be at least 4 characters long!')
+            return redirect(url_for('signup'))
+        
+        if password != confirm_password:
+            flash('Passwords do not match!')
+            return redirect(url_for('signup'))
+        
+        user_id = database.create_user(username, password)
+        if user_id:
+            session['user_id'] = user_id
+            session['username'] = username
+            data_manager.set_user(user_id)
+            flash(f'Account created successfully! Welcome, {username}!')
+            return redirect(url_for('dashboard'))
+        else:
+            flash('Username already exists! Please choose a different one.')
+            return redirect(url_for('signup'))
+    
+    return render_template('signup.html')
+
+
+@app.route('/logout')
+def logout():
+    username = session.get('username', 'User')
+    session.clear()
+    flash(f'Goodbye, {username}! You have been logged out.')
+    return redirect(url_for('login'))
+
+
+@app.route('/set_currency/<currency>', methods=['POST'])
+@login_required
+def set_currency(currency):
+    if currency in ['EUR', 'GBP', 'USD']:
+        session['currency'] = currency
+    return redirect(request.referrer or url_for('dashboard'))
+
+
+@app.route('/set_timeframe/<int:months>', methods=['POST'])
+@login_required
+def set_timeframe(months):
+    """Set the timeframe filter in session"""
+    if months in [1, 2, 3, 6, 9, 12]:
+        session['timeframe_months'] = months
+    return '', 204
+
+
+def filter_by_timeframe(items):
+    """Filter items by the selected timeframe"""
+    timeframe_months = session.get('timeframe_months', 12)  # Default to 12 months
+    cutoff_date = datetime.now() - timedelta(days=timeframe_months * 30)
+    
+    filtered_items = []
+    for item in items:
+        date_str = getattr(item, 'date', '')
+        if date_str:
+            try:
+                date_obj = datetime.strptime(date_str, '%Y-%m-%d')
+                if date_obj >= cutoff_date:
+                    filtered_items.append(item)
+            except:
+                pass
+    return filtered_items
 
 def predict_value(slope, intercept, x):
     """Predict a value using linear regression"""
@@ -38,11 +179,19 @@ def predict_value(slope, intercept, x):
     return slope * x + intercept
 
 
-@app.route('/')
+@app.route('/dashboard')
+@login_required
 def dashboard():
     try:
-        incomes = data_manager.get_incomes()
-        expenses = data_manager.get_expenses()
+        # Get timeframe from session (default to 12 months)
+        timeframe_months = session.get('timeframe_months', 12)
+        
+        # Get all data and filter by timeframe
+        all_incomes = data_manager.get_incomes()
+        all_expenses = data_manager.get_expenses()
+        
+        incomes = filter_by_timeframe(all_incomes)
+        expenses = filter_by_timeframe(all_expenses)
 
         # Calculate totals
         total_income = sum([float(getattr(t, 'amount', 0.0)) for t in incomes])
@@ -123,16 +272,20 @@ def dashboard():
             recent_transactions.append({
                 'date': getattr(income, 'date', ''),
                 'type': 'income',
+                'description': getattr(income, 'description', ''),
                 'category': getattr(income, 'category', ''),
-                'amount': float(getattr(income, 'amount', 0))
+                'amount': float(getattr(income, 'amount', 0)),
+                'currency': getattr(income, 'currency', 'EUR')
             })
 
         for expense in expenses:
             recent_transactions.append({
                 'date': getattr(expense, 'date', ''),
                 'type': 'expense',
+                'description': getattr(expense, 'description', ''),
                 'category': getattr(expense, 'category', ''),
-                'amount': float(getattr(expense, 'amount', 0))
+                'amount': float(getattr(expense, 'amount', 0)),
+                'currency': getattr(expense, 'currency', 'EUR')
             })
 
         # Sort by date (most recent first) and get last 5
@@ -175,18 +328,20 @@ def dashboard():
                            expense_trend_direction=expense_trend_direction,
                            recent_transactions=recent_transactions,
                            category_labels=category_labels,
-                           category_values=category_values)
+                           category_values=category_values,
+                           timeframe_months=timeframe_months)
 
 @app.route('/income', methods=['GET', 'POST'])
+@login_required
 def income():
     if request.method == 'POST':
-        # Get form data
         date = request.form.get('date')
-        category = request.form.get('category')
+        user_category = request.form.get('category')
+        description = request.form.get('description') or user_category
         amount = request.form.get('amount')
+        currency = request.form.get('currency', 'EUR')
 
-        # Validate
-        if not date or not category or not amount:
+        if not date or not user_category or not amount:
             flash('All fields are required!')
             return redirect(url_for('income'))
 
@@ -198,33 +353,43 @@ def income():
             flash('Invalid amount!')
             return redirect(url_for('income'))
 
-        # Create income entry
+        auto_category = auto_categorize_transaction(description, transaction_type='income')
+        category = auto_category if auto_category else user_category
+
         income_entry = {
             'date': date,
+            'description': description,
             'category': category,
-            'amount': amount
+            'amount': amount,
+            'currency': currency
         }
 
-        # Add to data manager
-        data_manager._incomes.append(type('Income', (), income_entry))
+        data_manager._incomes.append(type('Income', (), income_entry)())
+        data_manager.save()
 
         flash('Income added successfully!')
         return redirect(url_for('income'))
 
-    incomes = data_manager.get_incomes()
-    return render_template('income.html', incomes=incomes)
+    timeframe_months = session.get('timeframe_months', 12)
+    all_incomes = data_manager.get_incomes()
+    incomes = filter_by_timeframe(all_incomes)
+    # Sort by date descending (most recent first)
+    incomes = sorted(incomes, key=lambda x: x.date, reverse=True)
+    total_income = sum([float(getattr(t, 'amount', 0.0)) for t in incomes])
+    return render_template('income.html', incomes=incomes, total_income=total_income, timeframe_months=timeframe_months)
 
 
 @app.route('/expenses', methods=['GET', 'POST'])
+@login_required
 def expenses():
     if request.method == 'POST':
-        # Get form data
         date = request.form.get('date')
-        category = request.form.get('category')
+        user_category = request.form.get('category')
+        description = request.form.get('description') or user_category
         amount = request.form.get('amount')
+        currency = request.form.get('currency', 'EUR')
 
-        # Validate
-        if not date or not category or not amount:
+        if not date or not user_category or not amount:
             flash('All fields are required!')
             return redirect(url_for('expenses'))
 
@@ -236,44 +401,257 @@ def expenses():
             flash('Invalid amount!')
             return redirect(url_for('expenses'))
 
-        # Create expense entry
+        auto_category = auto_categorize_transaction(description, transaction_type='expenses')
+        category = auto_category if auto_category else user_category
+
         expense_entry = {
             'date': date,
+            'description': description,
             'category': category,
-            'amount': amount
+            'amount': amount,
+            'currency': currency
         }
 
-        # Add to data manager
-        data_manager._expenses.append(type('Expense', (), expense_entry))
+        data_manager._expenses.append(type('Expense', (), expense_entry)())
+        data_manager.save()
 
         flash('Expense added successfully!')
         return redirect(url_for('expenses'))
 
-    expenses = data_manager.get_expenses()
-    return render_template('expenses.html', expenses=expenses)
+    timeframe_months = session.get('timeframe_months', 12)
+    all_expenses = data_manager.get_expenses()
+    expenses = filter_by_timeframe(all_expenses)
+    # Sort by date descending (most recent first)
+    expenses = sorted(expenses, key=lambda x: x.date, reverse=True)
+    total_expenses = sum([float(getattr(t, 'amount', 0.0)) for t in expenses])
+    return render_template('expenses.html', expenses=expenses, total_expenses=total_expenses, timeframe_months=timeframe_months)
 
 
-@app.route('/delete_income/<int:income_id>', methods=['POST'])
-def delete_income(income_id):
+@app.route('/revolut_import', methods=['GET', 'POST'])
+@login_required
+def revolut_import():
+    if request.method == 'POST':
+        if 'revolut_csv' not in request.files:
+            flash('No file part', 'error')
+            return redirect(request.url)
+        
+        file = request.files['revolut_csv']
+        
+        if file.filename == '':
+            flash('No selected file', 'error')
+            return redirect(request.url)
+        
+        if file and file.filename.endswith('.csv'):
+            try:
+                csv_content = file.stream.read().decode('utf-8')
+                transactions = RevolutImporter.parse_csv(csv_content)
+                
+                imported_count = 0
+                skipped_count = 0
+                
+                for t in transactions:
+                    is_income = t.amount >= 0
+                    transaction_type = 'income' if is_income else 'expenses'
+                    # Look up category from merchant mappings
+                    category = auto_categorize_transaction(t.description, transaction_type=transaction_type)
+                    
+                    # If no category found in mappings, default to "Other"
+                    if not category:
+                        category = "Other"
+
+                    record_to_add = {
+                        'date': t.date.strftime('%Y-%m-%d'),
+                        'description': t.description,
+                        'category': category,
+                        'amount': abs(t.amount),
+                        'currency': t.currency
+                    }
+
+                    # Use a more robust duplicate check based on original description
+                    is_duplicate = False
+                    target_list = data_manager.get_incomes() if is_income else data_manager.get_expenses()
+                    for existing_record in target_list:
+                        if (getattr(existing_record, 'date') == record_to_add['date'] and
+                            getattr(existing_record, 'description', None) == record_to_add['description'] and
+                            float(getattr(existing_record, 'amount')) == float(record_to_add['amount'])):
+                            is_duplicate = True
+                            break
+
+                    if not is_duplicate:
+                        if is_income:
+                            # Adjust amount for income
+                            record_to_add['amount'] = t.amount
+                            data_manager._incomes.append(type('Income', (), record_to_add))
+                        else:
+                            data_manager._expenses.append(type('Expense', (), record_to_add))
+                        imported_count += 1
+                    else:
+                        skipped_count += 1
+
+                data_manager.save()
+                flash(f'Successfully imported {imported_count} Revolut transactions! Skipped {skipped_count} duplicate transactions.', 'success')
+                return redirect(url_for('dashboard'))
+            except Exception as e:
+                flash(f'Error importing transactions: {e}', 'error')
+                return redirect(request.url)
+        else:
+            flash('Invalid file type. Please upload a CSV file.', 'error')
+            return redirect(request.url)
+            
+    timeframe_months = session.get('timeframe_months', 12)
+    return render_template('revolut_import.html', timeframe_months=timeframe_months)
+
+
+@app.route('/delete_income/<date_str>/<float:amount>/<desc>', methods=['POST'])
+@login_required
+def delete_income(date_str, amount, desc):
     try:
-        del data_manager._incomes[income_id]
-        flash('Income deleted successfully!')
-    except IndexError:
-        flash('Income not found!')
+        # Find the income by matching date, description, and amount
+        target_income = None
+        for inc in data_manager._incomes:
+            inc_date = getattr(inc, 'date', '')
+            inc_desc = getattr(inc, 'description', '')
+            inc_amount = float(getattr(inc, 'amount', 0))
+            
+            if inc_date == date_str and inc_desc == desc and abs(inc_amount - amount) < 0.01:
+                target_income = inc
+                break
+        
+        if target_income:
+            data_manager._incomes.remove(target_income)
+            data_manager.save()
+            flash('Income deleted successfully!')
+        else:
+            flash('Income not found!')
+    except Exception as e:
+        flash(f'Error deleting income: {str(e)}')
     return redirect(url_for('income'))
 
 
-@app.route('/delete_expense/<int:expense_id>', methods=['POST'])
-def delete_expense(expense_id):
+@app.route('/change_income_category/<date_str>/<float:amount>/<desc>', methods=['POST'])
+@login_required
+def change_income_category(date_str, amount, desc):
     try:
-        del data_manager._expenses[expense_id]
-        flash('Expense deleted successfully!')
-    except IndexError:
-        flash('Expense not found!')
+        new_category = request.form.get('new_category')
+        if not new_category:
+            flash('Please select a category!')
+            return redirect(url_for('income'))
+        
+        # Find the income by matching date, description, and amount
+        # This avoids index mismatch issues with filtered/sorted lists
+        target_income = None
+        for inc in data_manager._incomes:
+            inc_date = getattr(inc, 'date', '')
+            inc_desc = getattr(inc, 'description', '')
+            inc_amount = float(getattr(inc, 'amount', 0))
+            
+            if inc_date == date_str and inc_desc == desc and abs(inc_amount - amount) < 0.01:
+                target_income = inc
+                break
+        
+        if not target_income:
+            flash('Income not found!')
+            return redirect(url_for('income'))
+        
+        merchant = getattr(target_income, 'description', None)
+        
+        # Update this income
+        target_income.category = new_category
+        
+        # Update all incomes with the same merchant/description
+        updated_count = 0
+        for inc in data_manager._incomes:
+            if getattr(inc, 'description', None) == merchant:
+                inc.category = new_category
+                updated_count += 1
+        
+        data_manager.save()
+        
+        # Save merchant-category mapping for auto-categorization of future transactions
+        update_merchant_category(merchant, new_category, transaction_type='income')
+        
+        flash(f'Category updated to "{new_category}" for {updated_count} transaction(s) from the same merchant!')
+    except Exception as e:
+        flash(f'Error updating category: {str(e)}')
+    return redirect(url_for('income'))
+
+
+@app.route('/delete_expense/<date_str>/<float:amount>/<desc>', methods=['POST'])
+@login_required
+def delete_expense(date_str, amount, desc):
+    try:
+        # Find the expense by matching date, description, and amount
+        target_expense = None
+        for exp in data_manager._expenses:
+            exp_date = getattr(exp, 'date', '')
+            exp_desc = getattr(exp, 'description', '')
+            exp_amount = float(getattr(exp, 'amount', 0))
+            
+            if exp_date == date_str and exp_desc == desc and abs(exp_amount - amount) < 0.01:
+                target_expense = exp
+                break
+        
+        if target_expense:
+            data_manager._expenses.remove(target_expense)
+            data_manager.save()
+            flash('Expense deleted successfully!')
+        else:
+            flash('Expense not found!')
+    except Exception as e:
+        flash(f'Error deleting expense: {str(e)}')
+    return redirect(url_for('expenses'))
+
+
+@app.route('/change_expense_category/<date_str>/<float:amount>/<desc>', methods=['POST'])
+@login_required
+def change_expense_category(date_str, amount, desc):
+    try:
+        new_category = request.form.get('new_category')
+        if not new_category:
+            flash('Please select a category!')
+            return redirect(url_for('expenses'))
+        
+        # Find the expense by matching date, description, and amount
+        # This avoids index mismatch issues with filtered/sorted lists
+        target_expense = None
+        for exp in data_manager._expenses:
+            exp_date = getattr(exp, 'date', '')
+            exp_desc = getattr(exp, 'description', '')
+            exp_amount = float(getattr(exp, 'amount', 0))
+            
+            if exp_date == date_str and exp_desc == desc and abs(exp_amount - amount) < 0.01:
+                target_expense = exp
+                break
+        
+        if not target_expense:
+            flash('Expense not found!')
+            return redirect(url_for('expenses'))
+        
+        merchant = getattr(target_expense, 'description', None)
+        
+        # Update this expense
+        target_expense.category = new_category
+        
+        # Update all expenses with the same merchant/description
+        updated_count = 0
+        for exp in data_manager._expenses:
+            if getattr(exp, 'description', None) == merchant:
+                exp.category = new_category
+                updated_count += 1
+        
+        data_manager.save()
+        
+        # Save merchant-category mapping for auto-categorization of future transactions
+        update_merchant_category(merchant, new_category, transaction_type='expenses')
+        
+        flash(f'Category updated to "{new_category}" for {updated_count} transaction(s) from the same merchant!')
+    except Exception as e:
+        flash(f'Error updating category: {str(e)}')
     return redirect(url_for('expenses'))
 
 
 @app.route('/budgets', methods=['GET', 'POST'])
+@login_required
 def budgets():
     if request.method == 'POST':
         category = request.form.get('category')
@@ -312,8 +690,10 @@ def budgets():
         flash('Budget limit set successfully!')
         return redirect(url_for('budgets'))
 
-    # Calculate spending per category
-    expenses = data_manager.get_expenses()
+    # Calculate spending per category with timeframe filtering
+    timeframe_months = session.get('timeframe_months', 12)
+    all_expenses = data_manager.get_expenses()
+    expenses = filter_by_timeframe(all_expenses)
     category_spending = {}
 
     for expense in expenses:
@@ -338,10 +718,11 @@ def budgets():
             'percentage': percentage
         })
 
-    return render_template('budgets.html', budgets=budget_list)
+    return render_template('budgets.html', budgets=budget_list, timeframe_months=timeframe_months)
 
 
 @app.route('/delete_budget/<int:budget_id>', methods=['POST'])
+@login_required
 def delete_budget(budget_id):
     try:
         del data_manager._budgets[budget_id]
@@ -353,10 +734,15 @@ def delete_budget(budget_id):
 
 
 @app.route('/reports')
+@login_required
 def reports():
-    # Get all transactions
-    incomes = data_manager.get_incomes()
-    expenses = data_manager.get_expenses()
+    timeframe_months = session.get('timeframe_months', 12)
+    
+    # Get all transactions and filter by timeframe
+    all_incomes = data_manager.get_incomes()
+    all_expenses = data_manager.get_expenses()
+    incomes = filter_by_timeframe(all_incomes)
+    expenses = filter_by_timeframe(all_expenses)
 
     # Calculate totals
     total_income = sum([float(getattr(t, 'amount', 0)) for t in incomes])
@@ -453,6 +839,7 @@ def reports():
         recent_transactions.append({
             'date': getattr(income, 'date', ''),
             'type': 'Income',
+            'description': getattr(income, 'description', ''),
             'category': getattr(income, 'category', ''),
             'amount': float(getattr(income, 'amount', 0))
         })
@@ -461,6 +848,7 @@ def reports():
         recent_transactions.append({
             'date': getattr(expense, 'date', ''),
             'type': 'Expense',
+            'description': getattr(expense, 'description', ''),
             'category': getattr(expense, 'category', ''),
             'amount': float(getattr(expense, 'amount', 0))
         })
@@ -480,16 +868,21 @@ def reports():
                            month_labels=month_labels,
                            income_trend=income_trend,
                            expense_trend=expense_trend,
-                           recent_transactions=recent_transactions)
+                           recent_transactions=recent_transactions,
+                           timeframe_months=timeframe_months)
 
 
 
 @app.route('/graphs-stats')
+@login_required
 def graphs_stats():
     """Comprehensive analytics and visualization dashboard with predictions"""
     try:
-        incomes = data_manager.get_incomes()
-        expenses = data_manager.get_expenses()
+        timeframe_months = session.get('timeframe_months', 12)
+        all_incomes = data_manager.get_incomes()
+        all_expenses = data_manager.get_expenses()
+        incomes = filter_by_timeframe(all_incomes)
+        expenses = filter_by_timeframe(all_expenses)
 
         # Calculate totals
         total_income = sum([float(getattr(t, 'amount', 0)) for t in incomes])
@@ -530,9 +923,15 @@ def graphs_stats():
                 except:
                     pass
 
-        # Ensure all days are represented
+        # Ensure all days are represented and calculate averages
         day_labels = day_order
-        day_values = [day_spending.get(day, 0) for day in day_order]
+        day_values = []
+        for day in day_order:
+            if day_transaction_counts[day] > 0:
+                average = day_spending[day] / day_transaction_counts[day]
+                day_values.append(average)
+            else:
+                day_values.append(0)
         day_transaction_counts_list = [day_transaction_counts.get(day, 0) for day in day_order]
 
         # ===== MONTHLY TRENDS =====
@@ -743,32 +1142,11 @@ def graphs_stats():
                            predicted_yearly_balance=predicted_yearly_balance,
                            top_pred_categories=top_pred_categories,
                            max_pred_category_value=max_pred_category_value,
-                           days_until_low=days_until_low)
+                           days_until_low=days_until_low,
+                           timeframe_months=timeframe_months)
 
-
-@app.route('/save')
-def save():
-    try:
-        data_manager.save()
-        flash('Data saved successfully!')
-    except Exception as e:
-        flash(f'Error saving data: {e}')
-    return redirect(url_for('dashboard'))
 
 
 if __name__ == '__main__':
     app.run(debug=True, port=5002)
-
-
-@app.route('/save')
-def save():
-    try:
-        data_manager.save()
-        flash('Data saved successfully!')
-    except Exception as e:
-        flash(f'Error saving data: {e}')
-    return redirect(url_for('dashboard'))
-
-
-if __name__ == '__main__':
     app.run(debug=True, port=5002)

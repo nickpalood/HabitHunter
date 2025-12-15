@@ -1,4 +1,4 @@
-/* Modern Budget Tracker - Inspired by React Homepage Design */
+/* Modern Habit Hunter - Inspired by React Homepage Design */
 
 :root {
     /* Primary palette - Purple/Violet gradient */
@@ -91,7 +91,7 @@ p {
 
 .navbar {
     background: white;
-    padding: 1rem 1.5rem;
+    padding: 0.5rem 1rem;
     box-shadow: 0 4px 15px rgba(0, 0, 0, 0.12);
     display: flex;
     justify-content: space-between;
@@ -105,18 +105,18 @@ p {
 .navbar-brand {
     display: flex;
     align-items: center;
-    gap: 1rem;
+    gap: 0.5rem;
 }
 
 .navbar-brand strong {
-    font-size: 1.25rem;
+    font-size: 1rem;
     color: #000000;
     font-weight: 800;
 }
 
 .navbar-avatar {
-    width: 36px;
-    height: 36px;
+    width: 30px;
+    height: 30px;
     border-radius: 50%;
     background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
     color: white;
@@ -124,23 +124,30 @@ p {
     align-items: center;
     justify-content: center;
     font-weight: 600;
-    font-size: 0.875rem;
+    font-size: 0.75rem;
+}
+
+.navbar-timeframe {
+    display: flex;
+    align-items: center;
+    margin-left: 1rem;
+    margin-right: auto;
 }
 
 .navbar-nav {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
+    gap: 0.25rem;
 }
 
 .navbar a {
     color: var(--gray-600);
     text-decoration: none;
-    padding: 0.5rem 1rem;
-    border-radius: 6px;
+    padding: 0.35rem 0.75rem;
+    border-radius: 4px;
     transition: var(--transition);
     font-weight: 500;
-    font-size: 0.9rem;
+    font-size: 0.8rem;
 }
 
 .navbar a:hover {
@@ -449,6 +456,16 @@ form {
     border: 1px solid var(--gray-100);
 }
 
+/* Override form styling for inline delete/action forms */
+form[style*="margin: 0"] {
+    background: transparent;
+    padding: 0;
+    border-radius: 0;
+    box-shadow: none;
+    margin-bottom: 0;
+    border: none;
+}
+
 .form-row {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
@@ -545,6 +562,7 @@ a.btn:active {
 .delete-btn {
     background: linear-gradient(135deg, #ef4444, #dc2626);
     box-shadow: 0 4px 15px rgba(239, 68, 68, 0.3);
+    border: none;
 }
 
 .btn-danger:hover,

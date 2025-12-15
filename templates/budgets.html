@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Budgets - Simple Budget Tracker</title>
+    <title>Budgets - Habit Hunter</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="{{ url_for('static', filename='base.css') }}">
 </head>
@@ -10,8 +10,19 @@
     <!-- Navbar -->
     <div class="navbar">
         <div class="navbar-brand">
-            <div class="navbar-avatar">A</div>
-            <strong>Budget Tracker</strong>
+            <div class="navbar-avatar">{{ session.username[0].upper() if session.username else 'U' }}</div>
+            <strong>Habit Hunter</strong>
+        </div>
+        <div class="navbar-timeframe">
+            <label for="timeframe" style="margin-right: 8px; font-size: 14px; color: #666;">Timeframe:</label>
+            <select id="timeframe" onchange="changeTimeframe(this.value)" style="padding: 6px 10px; border-radius: 4px; border: 1px solid #ddd; background: white; cursor: pointer;">
+                <option value="1" {% if timeframe_months == 1 %}selected{% endif %}>1 Month</option>
+                <option value="2" {% if timeframe_months == 2 %}selected{% endif %}>2 Months</option>
+                <option value="3" {% if timeframe_months == 3 %}selected{% endif %}>3 Months</option>
+                <option value="6" {% if timeframe_months == 6 %}selected{% endif %}>6 Months</option>
+                <option value="9" {% if timeframe_months == 9 %}selected{% endif %}>9 Months</option>
+                <option value="12" {% if timeframe_months == 12 %}selected{% endif %}>12 Months</option>
+            </select>
         </div>
         <div class="navbar-nav">
             <a href="{{ url_for('dashboard') }}">Dashboard</a>
@@ -20,15 +31,23 @@
             <a href="{{ url_for('budgets') }}" class="active">Budgets</a>
             <a href="{{ url_for('reports') }}">Reports</a>
             <a href="{{ url_for('graphs_stats') }}">Graphs & Stats</a>
+            <a href="{{ url_for('revolut_import') }}">Revolut Import</a>
+            <a href="{{ url_for('logout') }}" style="margin-left: auto;">Logout ({{ session.username }})</a>
         </div>
     </div>
+
+    <script>
+    function changeTimeframe(months) {
+        fetch('/set_timeframe/' + months, { method: 'POST' })
+            .then(() => window.location.reload());
+    }
+    </script>
 
     <div class="container container-lg">
         <!-- Page Header -->
         <div class="page-header">
             <div>
                 <h1>Budget Management</h1>
-                <p>Set and monitor your spending limits</p>
             </div>
         </div>
 
@@ -115,7 +134,7 @@
                                     {% endif %}
                                 </td>
                                 <td>
-                                    <form method="POST" action="{{ url_for('delete_budget', budget_id=loop.index0) }}" style="display: inline;">
+                                    <form method="POST" action="{{ url_for('delete_budget', budget_id=loop.index0) }}" style="margin: 0; background: transparent; display: inline;">
                                         <button type="submit" class="btn btn-danger btn-small" onclick="return confirm('Delete this budget?')">Delete</button>
                                     </form>
                                 </td>
